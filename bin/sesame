@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Sesame CLI wrapper - finds bun and runs the main entry point
+set -euo pipefail
+
+# Find the script's real directory (resolve symlinks)
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)"
+SESAME_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Find bun
+if command -v bun >/dev/null 2>&1; then
+  BUN="bun"
+elif [ -x "$HOME/.bun/bin/bun" ]; then
+  BUN="$HOME/.bun/bin/bun"
+else
+  echo "Error: bun is required but not found. Install it: https://bun.sh" >&2
+  exit 1
+fi
+
+exec "$BUN" "$SESAME_ROOT/src/sesame.ts" "$@"

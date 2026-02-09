@@ -1,0 +1,57 @@
+{
+  "name": "@aliou/sesame",
+  "version": "0.0.1",
+  "description": "Semantic search for coding agent sessions",
+  "type": "module",
+  "bin": {
+    "sesame": "./bin/sesame"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "bin",
+    "skills",
+    "share"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:binary": "bun run scripts/build.ts",
+    "dev": "./bin/sesame",
+    "test": "bun test",
+    "lint": "biome check",
+    "format": "biome check --write",
+    "version": "bunx @changesets/cli version",
+    "prepublishOnly": "bun run build"
+  },
+  "keywords": [
+    "semantic-search",
+    "coding-agent",
+    "pi",
+    "sqlite"
+  ],
+  "pi": {
+    "extensions": ["./share/pi-extension/src/index.ts"],
+    "skills": ["./skills"]
+  },
+  "author": "Aliou Diallo",
+  "license": "MIT",
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*"
+  },
+  "dependencies": {
+  },
+  "devDependencies": {
+    "@aliou/biome-plugins": "^0.2.0",
+    "@biomejs/biome": "^2.3.14",
+    "@types/bun": "latest",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}
