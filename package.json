@@ -1,6 +1,6 @@
 {
   "name": "@aliou/sesame",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Semantic search for coding agent sessions",
   "type": "module",
   "bin": {
@@ -35,16 +35,19 @@
     "sqlite"
   ],
   "pi": {
-    "extensions": ["./share/pi-extension/src/index.ts"],
-    "skills": ["./skills"]
+    "extensions": [
+      "./share/pi-extension/src/index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
   },
   "author": "Aliou Diallo",
   "license": "MIT",
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*"
   },
-  "dependencies": {
-  },
+  "dependencies": {},
   "devDependencies": {
     "@aliou/biome-plugins": "^0.2.0",
     "@biomejs/biome": "^2.3.14",
