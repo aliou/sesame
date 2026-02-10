@@ -8,6 +8,7 @@ const commands = {
   index: () => import("./commands/index-cmd"),
   search: () => import("./commands/search-cmd"),
   status: () => import("./commands/status-cmd"),
+  watch: () => import("./commands/watch-cmd"),
   help: () =>
     Promise.resolve({
       default: (..._args: unknown[]) => Promise.resolve(printUsage()),
@@ -26,6 +27,8 @@ Commands:
   index --full       Drop and rebuild index
   search <query>     Search sessions
   status             Show index statistics
+  watch              Watch session files and index on change
+  watch --interval <seconds>  Poll-based re-indexing at fixed interval
 
 Search options:
   --cwd <path>       Filter by project directory
