@@ -1,5 +1,11 @@
 # @aliou/sesame
 
+## 0.3.0
+
+### Minor Changes
+
+- 0a0f66b: Add watch command for daemon-mode indexing
+
 ## 0.2.0
 
 ### Minor Changes
