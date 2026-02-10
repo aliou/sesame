@@ -1,17 +1,16 @@
 # AGENTS.md
-- Stack: Bun + TypeScript (ESM) + SQLite FTS5; Biome v2 for lint/format.
+- Stack: Node.js (>=22.5) + TypeScript (ESM) + SQLite FTS5; pnpm for package management; Biome v2 for lint/format; vitest for tests.
 - Existing rule files in repo: none of CLAUDE.md/.cursorrules/.windsurfrules/.clinerules/.goosehints/.github/copilot-instructions.md.
 ## Build / lint / test
-- Install deps: `bun install`
-- Build/typecheck gate: `bun run build`
-- Lint: `bun run lint`
-- Format/fix: `bun run format`
-- Run all tests: `bun test` (same as `bun run test`)
-- Run one file: `bun test src/utils/date.test.ts`
-- Run one test: `bun test src/utils/date.test.ts -t "Invalid input throws"`
-- Build release binaries: `bun run build:binary`
+- Install deps: `pnpm install`
+- Build/typecheck gate: `pnpm run build`
+- Lint: `pnpm run lint`
+- Format/fix: `pnpm run format`
+- Run all tests: `pnpm test`
+- Run one file: `pnpm test src/utils/date.test.ts`
+- Run one test: `pnpm test src/utils/date.test.ts -- -t "Invalid input throws"`
 ## Architecture / codebase
-- `src/sesame.ts`: CLI entrypoint, lazy-dispatches `index|search|status`.
+- `src/sesame.ts`: CLI entrypoint, lazy-dispatches `index|search|status|watch`.
 - `src/commands/*-cmd.ts`: CLI arg parsing + user output.
 - `src/parsers/pi.ts` + `src/types/session.ts`: parse pi JSONL into normalized turns/tool calls.
 - `src/indexer/index.ts` + `src/indexer/format-tool-call.ts`: scan sources, mtime-incremental index, create `message` + `tool_call` chunks.
