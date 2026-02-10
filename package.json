@@ -44,6 +44,13 @@
   },
   "author": "Aliou Diallo",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aliou/sesame"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "packageManager": "pnpm@10.26.1",
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*"
