@@ -9,7 +9,7 @@ import type {
   SessionParser,
   ToolCall,
   Turn,
-} from "../types/session.ts";
+} from "../types/session";
 
 interface SessionHeader {
   type: "session";
