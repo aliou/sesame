@@ -1,5 +1,7 @@
-import { Database } from "bun:sqlite";
 import { statSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
+
+export type Database = DatabaseSync;
 
 export interface StoredSession {
   id: string;
@@ -109,7 +111,7 @@ CREATE INDEX IF NOT EXISTS idx_chunks_tool ON chunks(tool_name);
 `;
 
 export function openDatabase(dbPath: string): Database {
-  const db = new Database(dbPath);
+  const db = new DatabaseSync(dbPath);
 
   // Enable WAL mode for better concurrency
   db.exec("PRAGMA journal_mode = WAL");
@@ -152,7 +154,8 @@ export function insertSession(
      VALUES (?, ?, ?, ?, ?, ?)`,
   );
 
-  const transaction = db.transaction(() => {
+  db.exec("BEGIN");
+  try {
     insertSessionStmt.run(
       session.id,
       session.source,
@@ -175,9 +178,12 @@ export function insertSession(
         chunk.content,
       );
     }
-  });
 
-  transaction();
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 }
 
 export function search(
@@ -323,11 +329,13 @@ export function getStats(db: Database): {
   const chunkCount = (chunkCountStmt.get() as { count: number }).count;
 
   // Get database file size
-  const dbPath = db.filename;
+  const dbPath = db.location();
   let dbSizeBytes = 0;
   try {
-    const stats = statSync(dbPath);
-    dbSizeBytes = stats.size;
+    if (dbPath) {
+      const stats = statSync(dbPath);
+      dbSizeBytes = stats.size;
+    }
   } catch {
     // If file doesn't exist or can't be read, size is 0
   }

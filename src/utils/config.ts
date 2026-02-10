@@ -2,6 +2,7 @@
  * Configuration loading and management
  */
 
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ensureDir, getXDGPaths } from "./xdg";
 
@@ -45,8 +46,7 @@ export async function loadConfig(): Promise<SesameConfig> {
   const configPath = join(paths.config, "config.jsonc");
 
   try {
-    const file = Bun.file(configPath);
-    const text = await file.text();
+    const text = await readFile(configPath, "utf-8");
     const parsed = parseJSONC(text) as Partial<SesameConfig>;
 
     // Merge with defaults
@@ -58,7 +58,7 @@ export async function loadConfig(): Promise<SesameConfig> {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       await ensureDir(paths.config);
       const content = JSON.stringify(DEFAULT_CONFIG, null, 2);
-      await Bun.write(configPath, content);
+      await writeFile(configPath, content, "utf-8");
       return DEFAULT_CONFIG;
     }
     throw error;

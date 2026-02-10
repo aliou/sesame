@@ -3,6 +3,7 @@
  * https://specifications.freedesktop.org/basedir-spec/latest/
  */
 
+import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -73,9 +74,5 @@ export function getXDGPaths(): XDGPaths {
  * Ensure a directory exists, creating it if necessary.
  */
 export async function ensureDir(path: string): Promise<void> {
-  try {
-    await Bun.write(join(path, ".keep"), "");
-  } catch (_error) {
-    // Directory might already exist, which is fine
-  }
+  await mkdir(path, { recursive: true });
 }

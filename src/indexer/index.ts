@@ -1,7 +1,7 @@
-import type { Database } from "bun:sqlite";
-import { readdirSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
+  type Database,
   deleteSession,
   getSessionMtime,
   insertSession,
@@ -11,9 +11,9 @@ import {
 import type { SessionParser } from "../types/session";
 import { formatToolCall } from "./format-tool-call";
 
-async function readFirstLine(filePath: string): Promise<string | null> {
+function readFirstLine(filePath: string): string | null {
   try {
-    const text = await Bun.file(filePath).text();
+    const text = readFileSync(filePath, "utf-8");
     const newlineIndex = text.indexOf("\n");
     return newlineIndex === -1 ? text : text.slice(0, newlineIndex);
   } catch {
@@ -78,7 +78,7 @@ export async function indexSessions(
       const fileMtime = Math.floor(stats.mtimeMs);
 
       // Quick mtime check: read just the session ID from first line
-      const firstLine = await readFirstLine(filePath);
+      const firstLine = readFirstLine(filePath);
       if (firstLine) {
         const header = JSON.parse(firstLine);
         const sessionId = header.id;

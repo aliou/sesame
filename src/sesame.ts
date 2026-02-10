@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 /**
  * Sesame - Semantic search for coding agent sessions
  * Main CLI entry point

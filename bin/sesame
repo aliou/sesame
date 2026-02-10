@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# Sesame CLI wrapper - finds bun and runs the main entry point
+# Sesame CLI wrapper - finds node and runs the main entry point
 set -euo pipefail
 
 # Find the script's real directory (resolve symlinks)
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)"
 SESAME_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Find bun
-if command -v bun >/dev/null 2>&1; then
-  BUN="bun"
-elif [ -x "$HOME/.bun/bin/bun" ]; then
-  BUN="$HOME/.bun/bin/bun"
+# Find node
+if command -v node >/dev/null 2>&1; then
+  NODE="node"
+elif [ -x "$HOME/.nvm/versions/node/current/bin/node" ]; then
+  NODE="$HOME/.nvm/versions/node/current/bin/node"
 else
-  echo "Error: bun is required but not found. Install it: https://bun.sh" >&2
+  echo "Error: node is required but not found." >&2
   exit 1
 fi
 
-exec "$BUN" "$SESAME_ROOT/src/sesame.ts" "$@"
+exec "$NODE" --disable-warning=ExperimentalWarning --experimental-strip-types "$SESAME_ROOT/src/sesame.ts" "$@"

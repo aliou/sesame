@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, test } from "bun:test";
 import { unlinkSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
+import { afterEach, describe, expect, test } from "vitest";
 import { createSessionBuilder } from "../test-helpers/session-factory.ts";
 import { PiParser } from "./pi.ts";
 
@@ -21,7 +22,7 @@ describe("PiParser", () => {
 
   async function createTempFile(content: string): Promise<string> {
     const path = `/tmp/sesame-test-${Date.now()}-${Math.random()}.jsonl`;
-    await Bun.write(path, content);
+    await writeFile(path, content, "utf-8");
     tempFiles.push(path);
     return path;
   }
@@ -38,7 +39,7 @@ describe("PiParser", () => {
     test("returns false for non-.jsonl files", async () => {
       const content = createSessionBuilder().withHeader().build();
       const path = `/tmp/sesame-test-${Date.now()}.txt`;
-      await Bun.write(path, content);
+      await writeFile(path, content, "utf-8");
       tempFiles.push(path);
 
       const result = await parser.canParse(path);
