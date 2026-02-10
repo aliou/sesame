@@ -23,6 +23,7 @@
     "build:binary": "bun run scripts/build.ts",
     "dev": "./bin/sesame",
     "test": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest run",
+    "test:cli": "bun test ./test/cli.test.ts",
     "lint": "biome check",
     "format": "biome check --write",
     "version": "pnpm exec changeset version",

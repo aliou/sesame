@@ -1,7 +1,21 @@
 import { statSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
+import { createRequire } from "node:module";
 
-export type Database = DatabaseSync;
+const require = createRequire(import.meta.url);
+
+type StatementLike = {
+  run: (...args: unknown[]) => unknown;
+  get: (...args: unknown[]) => unknown;
+  all: (...args: unknown[]) => unknown;
+};
+
+export interface Database {
+  prepare: (sql: string) => StatementLike;
+  exec: (sql: string) => unknown;
+  close: () => void;
+  location?: () => string;
+  filename?: string;
+}
 
 export interface StoredSession {
   id: string;
@@ -110,8 +124,36 @@ CREATE INDEX IF NOT EXISTS idx_chunks_kind ON chunks(kind);
 CREATE INDEX IF NOT EXISTS idx_chunks_tool ON chunks(tool_name);
 `;
 
+const IS_BUN_RUNTIME =
+  typeof process !== "undefined" && Boolean(process.versions?.bun);
+
+const bunSqlite = IS_BUN_RUNTIME
+  ? (require("bun:sqlite") as {
+      Database: new (path: string) => Database;
+    })
+  : null;
+
+const nodeSqlite = !IS_BUN_RUNTIME
+  ? (require("node:sqlite") as {
+      DatabaseSync: new (path: string) => Database;
+    })
+  : null;
+
+function getDatabaseConstructor(): new (path: string) => Database {
+  if (IS_BUN_RUNTIME && bunSqlite) {
+    return bunSqlite.Database;
+  }
+
+  if (nodeSqlite) {
+    return nodeSqlite.DatabaseSync;
+  }
+
+  throw new Error("No SQLite implementation available for current runtime");
+}
+
 export function openDatabase(dbPath: string): Database {
-  const db = new DatabaseSync(dbPath);
+  const DatabaseConstructor = getDatabaseConstructor();
+  const db = new DatabaseConstructor(dbPath);
 
   // Enable WAL mode for better concurrency
   db.exec("PRAGMA journal_mode = WAL");
@@ -329,7 +371,7 @@ export function getStats(db: Database): {
   const chunkCount = (chunkCountStmt.get() as { count: number }).count;
 
   // Get database file size
-  const dbPath = db.location();
+  const dbPath = db.location?.() ?? db.filename;
   let dbSizeBytes = 0;
   try {
     if (dbPath) {

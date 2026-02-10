@@ -2,12 +2,14 @@
  * Status command - shows index statistics
  */
 
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { getStats, openDatabase } from "../storage/db";
 import { getXDGPaths } from "../utils/xdg";
 
 export default async function statusCommand(_args: string[]): Promise<void> {
   const paths = getXDGPaths();
+  mkdirSync(paths.data, { recursive: true });
   const dbPath = join(paths.data, "index.sqlite");
 
   const db = openDatabase(dbPath);
