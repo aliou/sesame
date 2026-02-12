@@ -471,4 +471,193 @@ describe("Database operations", () => {
     stats = getStats(db);
     expect(stats.sessionCount).toBe(1);
   });
+
+  test("search with '*' returns all sessions", () => {
+    db = openDatabase(dbPath);
+
+    // Insert 3 sessions
+    for (let i = 0; i < 3; i++) {
+      const session: StoredSession = {
+        id: `all-${i}`,
+        source: "pi",
+        path: `/path/to/${i}.jsonl`,
+        cwd: "/project",
+        name: `Session ${i}`,
+        created_at: `2026-01-${15 + i}T10:00:00Z`,
+        modified_at: `2026-01-${15 + i}T10:00:00Z`,
+        message_count: 1,
+        file_mtime: Date.now(),
+      };
+
+      const chunks: StoredChunk[] = [
+        {
+          id: 0,
+          session_id: `all-${i}`,
+          kind: "message",
+          role: "user",
+          tool_name: null,
+          seq: 0,
+          content: `content ${i}`,
+        },
+      ];
+
+      insertSession(db, session, chunks);
+    }
+
+    // Search with "*" and limit
+    const results = search(db, "*", { limit: 10 });
+
+    expect(results).toHaveLength(3);
+    expect(results[0].score).toBe(0); // No relevance score for list-all
+  });
+
+  test("search with '*' respects filters", () => {
+    db = openDatabase(dbPath);
+
+    const session1: StoredSession = {
+      id: "star-old",
+      source: "pi",
+      path: "/path/to/old.jsonl",
+      cwd: "/home/user/project-a",
+      name: "Old Session",
+      created_at: "2026-01-01T10:00:00Z",
+      modified_at: "2026-01-01T10:00:00Z",
+      message_count: 1,
+      file_mtime: Date.now(),
+    };
+
+    const session2: StoredSession = {
+      id: "star-new",
+      source: "pi",
+      path: "/path/to/new.jsonl",
+      cwd: "/home/user/project-b",
+      name: "New Session",
+      created_at: "2026-02-01T10:00:00Z",
+      modified_at: "2026-02-01T10:00:00Z",
+      message_count: 1,
+      file_mtime: Date.now(),
+    };
+
+    const chunks: StoredChunk[] = [
+      {
+        id: 0,
+        session_id: "star-old",
+        kind: "message",
+        role: "user",
+        tool_name: null,
+        seq: 0,
+        content: "content 1",
+      },
+      {
+        id: 0,
+        session_id: "star-new",
+        kind: "message",
+        role: "user",
+        tool_name: null,
+        seq: 0,
+        content: "content 2",
+      },
+    ];
+
+    insertSession(db, session1, [chunks[0]]);
+    insertSession(db, session2, [chunks[1]]);
+
+    // Filter by after date
+    const afterResults = search(db, "*", { after: "2026-01-15" });
+    expect(afterResults).toHaveLength(1);
+    expect(afterResults[0].sessionId).toBe("star-new");
+
+    // Filter by cwd
+    const cwdResults = search(db, "*", { cwd: "/home/user/project-a" });
+    expect(cwdResults).toHaveLength(1);
+    expect(cwdResults[0].sessionId).toBe("star-old");
+  });
+
+  test("search with '*' sorts by modified date descending", () => {
+    db = openDatabase(dbPath);
+
+    const session1: StoredSession = {
+      id: "oldest",
+      source: "pi",
+      path: "/path/to/oldest.jsonl",
+      cwd: "/project",
+      name: "Oldest",
+      created_at: "2026-01-01T10:00:00Z",
+      modified_at: "2026-01-01T10:00:00Z",
+      message_count: 1,
+      file_mtime: Date.now(),
+    };
+
+    const session2: StoredSession = {
+      id: "newest",
+      source: "pi",
+      path: "/path/to/newest.jsonl",
+      cwd: "/project",
+      name: "Newest",
+      created_at: "2026-03-01T10:00:00Z",
+      modified_at: "2026-03-01T10:00:00Z",
+      message_count: 1,
+      file_mtime: Date.now(),
+    };
+
+    const session3: StoredSession = {
+      id: "middle",
+      source: "pi",
+      path: "/path/to/middle.jsonl",
+      cwd: "/project",
+      name: "Middle",
+      created_at: "2026-02-01T10:00:00Z",
+      modified_at: "2026-02-01T10:00:00Z",
+      message_count: 1,
+      file_mtime: Date.now(),
+    };
+
+    const chunks: StoredChunk[] = [
+      {
+        id: 0,
+        session_id: "oldest",
+        kind: "message",
+        role: "user",
+        tool_name: null,
+        seq: 0,
+        content: "content 1",
+      },
+      {
+        id: 0,
+        session_id: "newest",
+        kind: "message",
+        role: "user",
+        tool_name: null,
+        seq: 0,
+        content: "content 2",
+      },
+      {
+        id: 0,
+        session_id: "middle",
+        kind: "message",
+        role: "user",
+        tool_name: null,
+        seq: 0,
+        content: "content 3",
+      },
+    ];
+
+    insertSession(db, session1, [chunks[0]]);
+    insertSession(db, session2, [chunks[1]]);
+    insertSession(db, session3, [chunks[2]]);
+
+    const results = search(db, "*", { limit: 10 });
+
+    expect(results).toHaveLength(3);
+    expect(results[0].sessionId).toBe("newest");
+    expect(results[1].sessionId).toBe("middle");
+    expect(results[2].sessionId).toBe("oldest");
+  });
+
+  test("search with empty query throws error", () => {
+    db = openDatabase(dbPath);
+
+    expect(() => search(db, "")).toThrow("Search query cannot be empty");
+    expect(() => search(db, "   ")).toThrow("Search query cannot be empty");
+  });
 });

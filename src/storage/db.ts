@@ -228,6 +228,70 @@ export function insertSession(
   }
 }
 
+/**
+ * List all sessions without FTS search, ordered by modification date.
+ * Used when query is "*" to bypass full-text search.
+ */
+function listAllSessions(db: Database, options: SearchOptions): SearchResult[] {
+  const { cwd, after, before, limit = 10 } = options;
+
+  let sql = `
+    SELECT 
+      s.id as sessionId,
+      s.source,
+      s.path,
+      s.cwd,
+      s.name,
+      s.created_at as createdAt,
+      s.modified_at as modifiedAt
+    FROM sessions s
+    WHERE 1=1
+  `;
+
+  const params: unknown[] = [];
+
+  if (cwd) {
+    sql += " AND s.cwd LIKE ?";
+    params.push(`${cwd}%`);
+  }
+
+  if (after) {
+    sql += " AND s.created_at >= ?";
+    params.push(after);
+  }
+
+  if (before) {
+    sql += " AND s.created_at <= ?";
+    params.push(before);
+  }
+
+  sql += " ORDER BY s.modified_at DESC LIMIT ?";
+  params.push(limit);
+
+  const stmt = db.prepare(sql);
+  const rows = stmt.all(...(params as [string])) as Array<{
+    sessionId: string;
+    source: string;
+    path: string;
+    cwd: string | null;
+    name: string | null;
+    createdAt: string | null;
+    modifiedAt: string | null;
+  }>;
+
+  return rows.map((row) => ({
+    sessionId: row.sessionId,
+    source: row.source,
+    path: row.path,
+    cwd: row.cwd,
+    name: row.name,
+    score: 0, // No relevance score for list-all
+    createdAt: row.createdAt,
+    modifiedAt: row.modifiedAt,
+    matchedSnippet: row.name || "(recent session)",
+  }));
+}
+
 export function search(
   db: Database,
   query: string,
@@ -242,6 +306,23 @@ export function search(
     toolName,
     pathFilter,
   } = options;
+
+  // Handle empty query
+  if (!query || query.trim() === "") {
+    throw new Error("Search query cannot be empty");
+  }
+
+  // Special case: "*" means list all sessions with filters
+  if (query === "*") {
+    // Validate that we have at least one constraint (limit counts due to default)
+    const hasFilters = cwd || after || before || limit;
+    if (!hasFilters) {
+      throw new Error(
+        'Query "*" requires at least one filter (cwd, after, before, or limit)',
+      );
+    }
+    return listAllSessions(db, options);
+  }
 
   const safeQuery = escapeFtsQuery(query);
 
