@@ -61,6 +61,7 @@ export interface SearchOptions {
   toolsOnly?: boolean;
   toolName?: string;
   pathFilter?: string;
+  exclude?: string[];
   json?: boolean;
   status?: "success" | "error";
 }
@@ -196,9 +197,9 @@ function runMigrations(db: Database, isFresh: boolean): void {
   `);
 
   // Collect already-applied migration IDs.
-  const rows = db
-    .prepare("SELECT id FROM schema_migrations")
-    .all() as Array<{ id: number }>;
+  const rows = db.prepare("SELECT id FROM schema_migrations").all() as Array<{
+    id: number;
+  }>;
   const applied = new Set(rows.map((r) => r.id));
 
   const insertStmt = db.prepare(
@@ -294,10 +295,12 @@ function listAllSessions(db: Database, options: SearchOptions): SearchResult[] {
     limit = 10,
     toolsOnly = false,
     toolName,
+    exclude,
     status,
   } = options;
 
-  const needsChunkJoin = toolsOnly || toolName || (status && (toolsOnly || toolName));
+  const needsChunkJoin =
+    toolsOnly || toolName || (status && (toolsOnly || toolName));
 
   let sql: string;
   if (needsChunkJoin) {
@@ -344,6 +347,11 @@ function listAllSessions(db: Database, options: SearchOptions): SearchResult[] {
   if (before) {
     sql += " AND s.created_at <= ?";
     params.push(before);
+  }
+
+  if (exclude && exclude.length > 0) {
+    sql += ` AND s.id NOT IN (${exclude.map(() => "?").join(",")})`;
+    params.push(...exclude);
   }
 
   if (needsChunkJoin) {
@@ -411,6 +419,7 @@ export function search(
     toolsOnly = false,
     toolName,
     pathFilter,
+    exclude,
     status,
   } = options;
 
@@ -488,6 +497,11 @@ export function search(
   if (before) {
     sql += " AND s.created_at <= ?";
     mainParams.push(before);
+  }
+
+  if (exclude && exclude.length > 0) {
+    sql += ` AND s.id NOT IN (${exclude.map(() => "?").join(",")})`;
+    mainParams.push(...exclude);
   }
 
   if (toolsOnly) {

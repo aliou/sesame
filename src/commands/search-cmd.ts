@@ -26,6 +26,7 @@ Options:
   --tools            Search only tool call chunks
   --tool <name>      Search specific tool type
   --path <file>      Find sessions that touched a file
+  --exclude <id>     Exclude session ID (repeatable)
   --json             Output as JSON`);
 }
 
@@ -55,6 +56,9 @@ export default async function searchCommand(args: string[]): Promise<void> {
       options.toolName = args[++i];
     } else if (arg === "--path") {
       options.pathFilter = args[++i];
+    } else if (arg === "--exclude") {
+      options.exclude ??= [];
+      options.exclude.push(args[++i]);
     } else if (arg === "--json") {
       options.json = true;
     } else if (!arg.startsWith("-")) {

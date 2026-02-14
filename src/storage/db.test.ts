@@ -674,6 +674,138 @@ describe("Database operations", () => {
     expect(results[2].sessionId).toBe("oldest");
   });
 
+  test("search with '*' exclude filters in SQL before limit", () => {
+    db = openDatabase(dbPath);
+
+    insertSession(
+      db,
+      {
+        id: "exclude-newest",
+        source: "pi",
+        path: "/path/to/newest.jsonl",
+        cwd: "/project",
+        name: "Newest",
+        created_at: "2026-03-01T10:00:00Z",
+        modified_at: "2026-03-01T10:00:00Z",
+        message_count: 1,
+        file_mtime: Date.now(),
+      },
+      [
+        {
+          id: 0,
+          session_id: "exclude-newest",
+          kind: "message",
+          role: "user",
+          tool_name: null,
+          seq: 0,
+          content: "shared content",
+          is_error: null,
+        },
+      ],
+    );
+
+    insertSession(
+      db,
+      {
+        id: "exclude-middle",
+        source: "pi",
+        path: "/path/to/middle.jsonl",
+        cwd: "/project",
+        name: "Middle",
+        created_at: "2026-02-01T10:00:00Z",
+        modified_at: "2026-02-01T10:00:00Z",
+        message_count: 1,
+        file_mtime: Date.now(),
+      },
+      [
+        {
+          id: 0,
+          session_id: "exclude-middle",
+          kind: "message",
+          role: "user",
+          tool_name: null,
+          seq: 0,
+          content: "shared content",
+          is_error: null,
+        },
+      ],
+    );
+
+    const results = search(db, "*", {
+      limit: 1,
+      exclude: ["exclude-newest"],
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].sessionId).toBe("exclude-middle");
+  });
+
+  test("FTS search exclude filters in SQL before limit", () => {
+    db = openDatabase(dbPath);
+
+    insertSession(
+      db,
+      {
+        id: "best-match",
+        source: "pi",
+        path: "/path/to/best.jsonl",
+        cwd: "/project",
+        name: "Best",
+        created_at: "2026-01-01T10:00:00Z",
+        modified_at: "2026-01-01T10:00:00Z",
+        message_count: 1,
+        file_mtime: Date.now(),
+      },
+      [
+        {
+          id: 0,
+          session_id: "best-match",
+          kind: "message",
+          role: "user",
+          tool_name: null,
+          seq: 0,
+          content: "alpha alpha alpha alpha alpha",
+          is_error: null,
+        },
+      ],
+    );
+
+    insertSession(
+      db,
+      {
+        id: "fallback-match",
+        source: "pi",
+        path: "/path/to/fallback.jsonl",
+        cwd: "/project",
+        name: "Fallback",
+        created_at: "2026-01-02T10:00:00Z",
+        modified_at: "2026-01-02T10:00:00Z",
+        message_count: 1,
+        file_mtime: Date.now(),
+      },
+      [
+        {
+          id: 0,
+          session_id: "fallback-match",
+          kind: "message",
+          role: "user",
+          tool_name: null,
+          seq: 0,
+          content: "alpha",
+          is_error: null,
+        },
+      ],
+    );
+
+    const results = search(db, "alpha", {
+      limit: 1,
+      exclude: ["best-match"],
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].sessionId).toBe("fallback-match");
+  });
+
   test("search with empty query throws error", () => {
     db = openDatabase(dbPath);
 
@@ -887,7 +1019,10 @@ describe("Database operations", () => {
     expect(errorResults[0].sessionId).toBe("error-session");
 
     // Filter for success only
-    const successResults = search(db, "*", { toolName: "Bash", status: "success" });
+    const successResults = search(db, "*", {
+      toolName: "Bash",
+      status: "success",
+    });
     expect(successResults).toHaveLength(1);
     expect(successResults[0].sessionId).toBe("success-session");
   });
@@ -1000,11 +1135,17 @@ describe("Database operations", () => {
     ]);
 
     // FTS search for "deploy" with status filter
-    const errorResults = search(db, "deploy", { toolName: "Bash", status: "error" });
+    const errorResults = search(db, "deploy", {
+      toolName: "Bash",
+      status: "error",
+    });
     expect(errorResults).toHaveLength(1);
     expect(errorResults[0].sessionId).toBe("fts-error");
 
-    const successResults = search(db, "deploy", { toolName: "Bash", status: "success" });
+    const successResults = search(db, "deploy", {
+      toolName: "Bash",
+      status: "success",
+    });
     expect(successResults).toHaveLength(1);
     expect(successResults[0].sessionId).toBe("fts-success");
   });
