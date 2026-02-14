@@ -20,12 +20,15 @@
   ],
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "build:binary": "bun run scripts/build.ts",
     "dev": "./bin/sesame",
     "test": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest run",
     "test:cli": "bun test ./test/cli.test.ts",
     "lint": "biome check",
     "format": "biome check --write",
+    "check:lockfile": "pnpm install --frozen-lockfile --ignore-scripts",
+    "prepare": "husky",
     "prepublishOnly": "pnpm run build"
   },
   "keywords": [
@@ -59,6 +62,7 @@
     "@aliou/biome-plugins": "^0.3.1",
     "@biomejs/biome": "^2.3.14",
     "@types/node": "^22.15.30",
+    "husky": "^9.1.7",
     "typescript": "^5.7.2",
     "vitest": "^4.0.18"
   },
