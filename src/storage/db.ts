@@ -1,5 +1,6 @@
 import { statSync } from "node:fs";
 import { createRequire } from "node:module";
+import { migrations } from "./migrations/index";
 
 const require = createRequire(import.meta.url);
 
@@ -37,6 +38,7 @@ export interface StoredChunk {
   tool_name: string | null;
   seq: number;
   content: string;
+  is_error: number | null; // 0 = success, 1 = error, null = not applicable
 }
 
 export interface SearchResult {
@@ -60,6 +62,7 @@ export interface SearchOptions {
   toolName?: string;
   pathFilter?: string;
   json?: boolean;
+  status?: "success" | "error";
 }
 
 /**
@@ -96,7 +99,8 @@ CREATE TABLE IF NOT EXISTS chunks (
   role TEXT,
   tool_name TEXT,
   seq INTEGER,
-  content TEXT NOT NULL
+  content TEXT NOT NULL,
+  is_error INTEGER DEFAULT NULL
 );
 
 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
@@ -161,10 +165,59 @@ export function openDatabase(dbPath: string): Database {
   // Enable foreign keys
   db.exec("PRAGMA foreign_keys = ON");
 
-  // Create schema
+  // Detect whether the database already has tables (existing DB vs fresh).
+  // Must happen before SCHEMA so we know whether to run or skip migrations.
+  const existing = db
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'",
+    )
+    .get() as { name: string } | undefined;
+  const isFresh = !existing;
+
+  // Create schema. Uses CREATE IF NOT EXISTS so it's safe for both fresh
+  // and existing databases. The SCHEMA constant always reflects the latest
+  // table definitions, including columns added by migrations.
   db.exec(SCHEMA);
 
+  // Run pending migrations.
+  runMigrations(db, isFresh);
+
   return db;
+}
+
+function runMigrations(db: Database, isFresh: boolean): void {
+  // Ensure tracking table exists.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      id INTEGER PRIMARY KEY,
+      description TEXT,
+      applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  // Collect already-applied migration IDs.
+  const rows = db
+    .prepare("SELECT id FROM schema_migrations")
+    .all() as Array<{ id: number }>;
+  const applied = new Set(rows.map((r) => r.id));
+
+  const insertStmt = db.prepare(
+    "INSERT INTO schema_migrations (id, description) VALUES (?, ?)",
+  );
+
+  for (const migration of migrations) {
+    if (applied.has(migration.id)) {
+      continue;
+    }
+
+    // Fresh databases already have the latest schema from the SCHEMA
+    // constant, so we only need to record the migration, not run it.
+    if (!isFresh) {
+      migration.fn(db);
+    }
+
+    insertStmt.run(migration.id, migration.description);
+  }
 }
 
 export function getSessionMtime(
@@ -192,8 +245,8 @@ export function insertSession(
   );
 
   const insertChunkStmt = db.prepare(
-    `INSERT INTO chunks (session_id, kind, role, tool_name, seq, content)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO chunks (session_id, kind, role, tool_name, seq, content, is_error)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
   );
 
   db.exec("BEGIN");
@@ -218,6 +271,7 @@ export function insertSession(
         chunk.tool_name,
         chunk.seq,
         chunk.content,
+        chunk.is_error,
       );
     }
 
@@ -233,20 +287,47 @@ export function insertSession(
  * Used when query is "*" to bypass full-text search.
  */
 function listAllSessions(db: Database, options: SearchOptions): SearchResult[] {
-  const { cwd, after, before, limit = 10 } = options;
+  const {
+    cwd,
+    after,
+    before,
+    limit = 10,
+    toolsOnly = false,
+    toolName,
+    status,
+  } = options;
 
-  let sql = `
-    SELECT 
-      s.id as sessionId,
-      s.source,
-      s.path,
-      s.cwd,
-      s.name,
-      s.created_at as createdAt,
-      s.modified_at as modifiedAt
-    FROM sessions s
-    WHERE 1=1
-  `;
+  const needsChunkJoin = toolsOnly || toolName || (status && (toolsOnly || toolName));
+
+  let sql: string;
+  if (needsChunkJoin) {
+    sql = `
+      SELECT DISTINCT
+        s.id as sessionId,
+        s.source,
+        s.path,
+        s.cwd,
+        s.name,
+        s.created_at as createdAt,
+        s.modified_at as modifiedAt
+      FROM sessions s
+      JOIN chunks c ON c.session_id = s.id
+      WHERE 1=1
+    `;
+  } else {
+    sql = `
+      SELECT 
+        s.id as sessionId,
+        s.source,
+        s.path,
+        s.cwd,
+        s.name,
+        s.created_at as createdAt,
+        s.modified_at as modifiedAt
+      FROM sessions s
+      WHERE 1=1
+    `;
+  }
 
   const params: unknown[] = [];
 
@@ -263,6 +344,31 @@ function listAllSessions(db: Database, options: SearchOptions): SearchResult[] {
   if (before) {
     sql += " AND s.created_at <= ?";
     params.push(before);
+  }
+
+  if (needsChunkJoin) {
+    if (toolsOnly) {
+      sql += " AND c.kind = 'tool_call'";
+    }
+
+    if (toolName) {
+      sql += " AND c.tool_name = ?";
+      params.push(toolName);
+    }
+
+    if (status && (toolsOnly || toolName)) {
+      const isErrorValue = status === "error" ? 1 : 0;
+      // Status filter requires a matching tool result chunk in the same session
+      sql += ` AND s.id IN (
+        SELECT c2.session_id FROM chunks c2
+        WHERE c2.is_error = ?
+        ${toolName ? "AND c2.tool_name = ?" : ""}
+      )`;
+      params.push(isErrorValue);
+      if (toolName) {
+        params.push(toolName);
+      }
+    }
   }
 
   sql += " ORDER BY s.modified_at DESC LIMIT ?";
@@ -305,6 +411,7 @@ export function search(
     toolsOnly = false,
     toolName,
     pathFilter,
+    status,
   } = options;
 
   // Handle empty query
@@ -397,6 +504,19 @@ export function search(
     mainParams.push(`%${pathFilter}%`);
   }
 
+  if (status && (toolsOnly || toolName)) {
+    const isErrorValue = status === "error" ? 1 : 0;
+    sql += ` AND s.id IN (
+      SELECT c2.session_id FROM chunks c2
+      WHERE c2.is_error = ?
+      ${toolName ? "AND c2.tool_name = ?" : ""}
+    )`;
+    mainParams.push(isErrorValue);
+    if (toolName) {
+      mainParams.push(toolName);
+    }
+  }
+
   const mainStmt = db.prepare(sql);
   const rows = mainStmt.all(...(mainParams as [string])) as Array<{
     sessionId: string;
@@ -481,7 +601,9 @@ export function dropAll(db: Database): void {
   db.exec("DROP TABLE IF EXISTS chunks_fts");
   db.exec("DROP TABLE IF EXISTS chunks");
   db.exec("DROP TABLE IF EXISTS sessions");
+  db.exec("DROP TABLE IF EXISTS schema_migrations");
 
-  // Recreate schema
+  // Recreate schema and mark all migrations as applied
   db.exec(SCHEMA);
+  runMigrations(db, true);
 }
