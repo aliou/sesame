@@ -1,6 +1,6 @@
 {
   "name": "@aliou/sesame",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Semantic search for coding agent sessions",
   "type": "module",
   "bin": {
