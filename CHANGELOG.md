@@ -1,5 +1,12 @@
 # @aliou/sesame
 
+## 0.5.0
+
+### Minor Changes
+
+- 54b7450: Add schema_migrations table for lightweight DB migrations. Replaces inline ALTER TABLE with a tracked migration system using sequential migration files.
+- ca7cb24: Add tool call success/failure status to index and search. New `is_error` column on chunks, `status` search filter, and `toolName`/`toolsOnly` now work with wildcard queries.
+
 ## 0.4.0
 
 ### Minor Changes
