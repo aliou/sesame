@@ -65,6 +65,7 @@ interface ToolResultMessage {
     role: "toolResult";
     toolCallId: string;
     toolName: string;
+    isError?: boolean;
     content: ContentBlock[];
   };
 }
@@ -200,6 +201,8 @@ export class PiParser implements SessionParser {
                 textContent,
                 codeBlocks: [],
                 toolCalls: [],
+                toolName: toolResultMsg.message.toolName,
+                isError: toolResultMsg.message.isError ?? false,
               });
             } else if (msg.message.role === "bashExecution") {
               const bashMsg = msg as BashExecutionMessage;

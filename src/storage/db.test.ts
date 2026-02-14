@@ -77,6 +77,7 @@ describe("Database operations", () => {
         tool_name: null,
         seq: 0,
         content: "How do I write a test?",
+        is_error: null,
       },
       {
         id: 0,
@@ -86,6 +87,7 @@ describe("Database operations", () => {
         tool_name: null,
         seq: 1,
         content: "You can use the test framework to write tests.",
+        is_error: null,
       },
     ];
 
@@ -126,6 +128,7 @@ describe("Database operations", () => {
         seq: 0,
         content:
           "How do I optimize database queries? I need help with database performance and database indexing.",
+        is_error: null,
       },
     ];
 
@@ -151,6 +154,7 @@ describe("Database operations", () => {
         tool_name: null,
         seq: 0,
         content: "The database mentioned in passing.",
+        is_error: null,
       },
     ];
 
@@ -200,6 +204,7 @@ describe("Database operations", () => {
         tool_name: null,
         seq: 0,
         content: "testing content",
+        is_error: null,
       },
       {
         id: 0,
@@ -209,6 +214,7 @@ describe("Database operations", () => {
         tool_name: null,
         seq: 0,
         content: "testing content",
+        is_error: null,
       },
     ];
 
@@ -257,6 +263,7 @@ describe("Database operations", () => {
         tool_name: null,
         seq: 0,
         content: "testing filter",
+        is_error: null,
       },
       {
         id: 0,
@@ -266,6 +273,7 @@ describe("Database operations", () => {
         tool_name: null,
         seq: 0,
         content: "testing filter",
+        is_error: null,
       },
     ];
 
@@ -309,6 +317,7 @@ describe("Database operations", () => {
           tool_name: null,
           seq: 0,
           content: "common search term",
+          is_error: null,
         },
       ];
 
@@ -344,6 +353,7 @@ describe("Database operations", () => {
         tool_name: null,
         seq: 0,
         content: "test content",
+        is_error: null,
       },
     ];
 
@@ -393,6 +403,7 @@ describe("Database operations", () => {
         tool_name: null,
         seq: 0,
         content: "chunk 1",
+        is_error: null,
       },
       {
         id: 0,
@@ -402,6 +413,7 @@ describe("Database operations", () => {
         tool_name: null,
         seq: 1,
         content: "chunk 2",
+        is_error: null,
       },
       {
         id: 0,
@@ -411,6 +423,7 @@ describe("Database operations", () => {
         tool_name: null,
         seq: 2,
         content: "chunk 3",
+        is_error: null,
       },
     ];
 
@@ -448,6 +461,7 @@ describe("Database operations", () => {
         tool_name: null,
         seq: 0,
         content: "test",
+        is_error: null,
       },
     ];
 
@@ -498,6 +512,7 @@ describe("Database operations", () => {
           tool_name: null,
           seq: 0,
           content: `content ${i}`,
+          is_error: null,
         },
       ];
 
@@ -547,6 +562,7 @@ describe("Database operations", () => {
         tool_name: null,
         seq: 0,
         content: "content 1",
+        is_error: null,
       },
       {
         id: 0,
@@ -556,6 +572,7 @@ describe("Database operations", () => {
         tool_name: null,
         seq: 0,
         content: "content 2",
+        is_error: null,
       },
     ];
 
@@ -621,6 +638,7 @@ describe("Database operations", () => {
         tool_name: null,
         seq: 0,
         content: "content 1",
+        is_error: null,
       },
       {
         id: 0,
@@ -630,6 +648,7 @@ describe("Database operations", () => {
         tool_name: null,
         seq: 0,
         content: "content 2",
+        is_error: null,
       },
       {
         id: 0,
@@ -639,6 +658,7 @@ describe("Database operations", () => {
         tool_name: null,
         seq: 0,
         content: "content 3",
+        is_error: null,
       },
     ];
 
@@ -659,5 +679,333 @@ describe("Database operations", () => {
 
     expect(() => search(db, "")).toThrow("Search query cannot be empty");
     expect(() => search(db, "   ")).toThrow("Search query cannot be empty");
+  });
+
+  test("search with '*' filters by toolName", () => {
+    db = openDatabase(dbPath);
+
+    const session1: StoredSession = {
+      id: "tool-session",
+      source: "pi",
+      path: "/path/to/tool.jsonl",
+      cwd: "/project",
+      name: "Tool Session",
+      created_at: "2026-01-15T10:00:00Z",
+      modified_at: "2026-01-15T10:00:00Z",
+      message_count: 2,
+      file_mtime: Date.now(),
+    };
+
+    const session2: StoredSession = {
+      id: "no-tool-session",
+      source: "pi",
+      path: "/path/to/notool.jsonl",
+      cwd: "/project",
+      name: "No Tool Session",
+      created_at: "2026-01-15T11:00:00Z",
+      modified_at: "2026-01-15T11:00:00Z",
+      message_count: 1,
+      file_mtime: Date.now(),
+    };
+
+    insertSession(db, session1, [
+      {
+        id: 0,
+        session_id: "tool-session",
+        kind: "message",
+        role: "user",
+        tool_name: null,
+        seq: 0,
+        content: "help me write a file",
+        is_error: null,
+      },
+      {
+        id: 0,
+        session_id: "tool-session",
+        kind: "tool_call",
+        role: null,
+        tool_name: "Bash",
+        seq: 1,
+        content: "tool: Bash\ncommand: ls -la",
+        is_error: null,
+      },
+    ]);
+
+    insertSession(db, session2, [
+      {
+        id: 0,
+        session_id: "no-tool-session",
+        kind: "message",
+        role: "user",
+        tool_name: null,
+        seq: 0,
+        content: "just chatting",
+        is_error: null,
+      },
+    ]);
+
+    // "*" with toolName should only return session with that tool
+    const results = search(db, "*", { toolName: "Bash" });
+    expect(results).toHaveLength(1);
+    expect(results[0].sessionId).toBe("tool-session");
+  });
+
+  test("search with '*' filters by toolsOnly", () => {
+    db = openDatabase(dbPath);
+
+    const session1: StoredSession = {
+      id: "has-tools",
+      source: "pi",
+      path: "/path/to/tools.jsonl",
+      cwd: "/project",
+      name: "Has Tools",
+      created_at: "2026-01-15T10:00:00Z",
+      modified_at: "2026-01-15T10:00:00Z",
+      message_count: 1,
+      file_mtime: Date.now(),
+    };
+
+    const session2: StoredSession = {
+      id: "no-tools",
+      source: "pi",
+      path: "/path/to/notools.jsonl",
+      cwd: "/project",
+      name: "No Tools",
+      created_at: "2026-01-15T11:00:00Z",
+      modified_at: "2026-01-15T11:00:00Z",
+      message_count: 1,
+      file_mtime: Date.now(),
+    };
+
+    insertSession(db, session1, [
+      {
+        id: 0,
+        session_id: "has-tools",
+        kind: "tool_call",
+        role: null,
+        tool_name: "Write",
+        seq: 0,
+        content: "tool: Write\npath: test.txt",
+        is_error: null,
+      },
+    ]);
+
+    insertSession(db, session2, [
+      {
+        id: 0,
+        session_id: "no-tools",
+        kind: "message",
+        role: "user",
+        tool_name: null,
+        seq: 0,
+        content: "just a message",
+        is_error: null,
+      },
+    ]);
+
+    const results = search(db, "*", { toolsOnly: true });
+    expect(results).toHaveLength(1);
+    expect(results[0].sessionId).toBe("has-tools");
+  });
+
+  test("search with '*' filters by status with toolName", () => {
+    db = openDatabase(dbPath);
+
+    const session1: StoredSession = {
+      id: "error-session",
+      source: "pi",
+      path: "/path/to/error.jsonl",
+      cwd: "/project",
+      name: "Error Session",
+      created_at: "2026-01-15T10:00:00Z",
+      modified_at: "2026-01-15T10:00:00Z",
+      message_count: 2,
+      file_mtime: Date.now(),
+    };
+
+    const session2: StoredSession = {
+      id: "success-session",
+      source: "pi",
+      path: "/path/to/success.jsonl",
+      cwd: "/project",
+      name: "Success Session",
+      created_at: "2026-01-15T11:00:00Z",
+      modified_at: "2026-01-15T11:00:00Z",
+      message_count: 2,
+      file_mtime: Date.now(),
+    };
+
+    insertSession(db, session1, [
+      {
+        id: 0,
+        session_id: "error-session",
+        kind: "tool_call",
+        role: null,
+        tool_name: "Bash",
+        seq: 0,
+        content: "tool: Bash\ncommand: exit 1",
+        is_error: null,
+      },
+      {
+        id: 0,
+        session_id: "error-session",
+        kind: "message",
+        role: "system",
+        tool_name: "Bash",
+        seq: 1,
+        content: "Command failed with exit code 1",
+        is_error: 1,
+      },
+    ]);
+
+    insertSession(db, session2, [
+      {
+        id: 0,
+        session_id: "success-session",
+        kind: "tool_call",
+        role: null,
+        tool_name: "Bash",
+        seq: 0,
+        content: "tool: Bash\ncommand: echo hello",
+        is_error: null,
+      },
+      {
+        id: 0,
+        session_id: "success-session",
+        kind: "message",
+        role: "system",
+        tool_name: "Bash",
+        seq: 1,
+        content: "hello",
+        is_error: 0,
+      },
+    ]);
+
+    // Filter for errors only
+    const errorResults = search(db, "*", { toolName: "Bash", status: "error" });
+    expect(errorResults).toHaveLength(1);
+    expect(errorResults[0].sessionId).toBe("error-session");
+
+    // Filter for success only
+    const successResults = search(db, "*", { toolName: "Bash", status: "success" });
+    expect(successResults).toHaveLength(1);
+    expect(successResults[0].sessionId).toBe("success-session");
+  });
+
+  test("status filter is ignored without toolName or toolsOnly", () => {
+    db = openDatabase(dbPath);
+
+    const session: StoredSession = {
+      id: "status-ignored",
+      source: "pi",
+      path: "/path/to/session.jsonl",
+      cwd: "/project",
+      name: "Status Ignored",
+      created_at: "2026-01-15T10:00:00Z",
+      modified_at: "2026-01-15T10:00:00Z",
+      message_count: 1,
+      file_mtime: Date.now(),
+    };
+
+    insertSession(db, session, [
+      {
+        id: 0,
+        session_id: "status-ignored",
+        kind: "message",
+        role: "user",
+        tool_name: null,
+        seq: 0,
+        content: "just a message",
+        is_error: null,
+      },
+    ]);
+
+    // status without toolName/toolsOnly should be ignored, returning the session
+    const results = search(db, "*", { status: "error" });
+    expect(results).toHaveLength(1);
+    expect(results[0].sessionId).toBe("status-ignored");
+  });
+
+  test("FTS search with status filter works", () => {
+    db = openDatabase(dbPath);
+
+    const session1: StoredSession = {
+      id: "fts-error",
+      source: "pi",
+      path: "/path/to/fts-error.jsonl",
+      cwd: "/project",
+      name: "FTS Error",
+      created_at: "2026-01-15T10:00:00Z",
+      modified_at: "2026-01-15T10:00:00Z",
+      message_count: 2,
+      file_mtime: Date.now(),
+    };
+
+    const session2: StoredSession = {
+      id: "fts-success",
+      source: "pi",
+      path: "/path/to/fts-success.jsonl",
+      cwd: "/project",
+      name: "FTS Success",
+      created_at: "2026-01-15T11:00:00Z",
+      modified_at: "2026-01-15T11:00:00Z",
+      message_count: 2,
+      file_mtime: Date.now(),
+    };
+
+    insertSession(db, session1, [
+      {
+        id: 0,
+        session_id: "fts-error",
+        kind: "tool_call",
+        role: null,
+        tool_name: "Bash",
+        seq: 0,
+        content: "tool: Bash\ncommand: deploy application",
+        is_error: null,
+      },
+      {
+        id: 0,
+        session_id: "fts-error",
+        kind: "message",
+        role: "system",
+        tool_name: "Bash",
+        seq: 1,
+        content: "deploy failed",
+        is_error: 1,
+      },
+    ]);
+
+    insertSession(db, session2, [
+      {
+        id: 0,
+        session_id: "fts-success",
+        kind: "tool_call",
+        role: null,
+        tool_name: "Bash",
+        seq: 0,
+        content: "tool: Bash\ncommand: deploy application",
+        is_error: null,
+      },
+      {
+        id: 0,
+        session_id: "fts-success",
+        kind: "message",
+        role: "system",
+        tool_name: "Bash",
+        seq: 1,
+        content: "deploy succeeded",
+        is_error: 0,
+      },
+    ]);
+
+    // FTS search for "deploy" with status filter
+    const errorResults = search(db, "deploy", { toolName: "Bash", status: "error" });
+    expect(errorResults).toHaveLength(1);
+    expect(errorResults[0].sessionId).toBe("fts-error");
+
+    const successResults = search(db, "deploy", { toolName: "Bash", status: "success" });
+    expect(successResults).toHaveLength(1);
+    expect(successResults[0].sessionId).toBe("fts-success");
   });
 });

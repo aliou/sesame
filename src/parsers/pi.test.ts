@@ -168,6 +168,25 @@ describe("PiParser", () => {
       expect(session.turns).toHaveLength(1);
       expect(session.turns[0].role).toBe("system");
       expect(session.turns[0].textContent).toBe("File written successfully");
+      expect(session.turns[0].toolName).toBe("Write");
+      expect(session.turns[0].isError).toBe(false);
+    });
+
+    test("parses tool results with isError flag", async () => {
+      const content = createSessionBuilder()
+        .withHeader()
+        .withToolResult("Bash", "Command failed with exit code 1", {
+          isError: true,
+        })
+        .build();
+      const path = await createTempFile(content);
+
+      const session = await parser.parse(path);
+
+      expect(session.turns).toHaveLength(1);
+      expect(session.turns[0].role).toBe("system");
+      expect(session.turns[0].toolName).toBe("Bash");
+      expect(session.turns[0].isError).toBe(true);
     });
 
     test("parses bash executions as system turns with $ command\\noutput format", async () => {

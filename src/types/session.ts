@@ -25,6 +25,10 @@ export interface Turn {
   codeBlocks: CodeBlock[];
   /** Structured tool call metadata */
   toolCalls: ToolCall[];
+  /** Tool name for tool result turns (role="system") */
+  toolName?: string;
+  /** Whether this tool result represents an error (only for tool result turns) */
+  isError?: boolean;
 }
 
 export interface ParsedSession {

@@ -13,7 +13,11 @@ export interface SessionBuilder {
   withAssistantMessage(text: string): SessionBuilder;
   withWriteToolCall(path: string, content: string): SessionBuilder;
   withBashToolCall(command: string): SessionBuilder;
-  withToolResult(toolName: string, content: string): SessionBuilder;
+  withToolResult(
+    toolName: string,
+    content: string,
+    options?: { isError?: boolean },
+  ): SessionBuilder;
   withBashExecution(command: string, output: string): SessionBuilder;
   withCompactionSummary(summary: string): SessionBuilder;
   build(): string;
@@ -109,7 +113,11 @@ export function createSessionBuilder(): SessionBuilder {
       return this;
     },
 
-    withToolResult(toolName: string, content: string) {
+    withToolResult(
+      toolName: string,
+      content: string,
+      options?: { isError?: boolean },
+    ) {
       lines.push(
         JSON.stringify({
           type: "message",
@@ -117,6 +125,7 @@ export function createSessionBuilder(): SessionBuilder {
             role: "toolResult",
             toolCallId: "tc_1",
             toolName,
+            isError: options?.isError ?? false,
             content: [{ type: "text", text: content }],
           },
         }),

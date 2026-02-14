@@ -127,9 +127,11 @@ export async function indexSessions(
             session_id: parsedSession.id,
             kind: "message",
             role: turn.role,
-            tool_name: null,
+            tool_name: turn.toolName ?? null,
             seq: seq++,
             content: turn.textContent,
+            is_error:
+              turn.isError !== undefined ? (turn.isError ? 1 : 0) : null,
           });
         }
 
@@ -145,6 +147,7 @@ export async function indexSessions(
               tool_name: tc.name,
               seq: seq++,
               content,
+              is_error: null,
             });
           }
         }
