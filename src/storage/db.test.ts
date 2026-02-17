@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
   deleteSession,
   dropAll,
+  getMetadata,
   getStats,
   insertSession,
   openDatabase,
+  setMetadata,
   type StoredChunk,
   type StoredSession,
   search,
@@ -51,6 +53,7 @@ describe("Database operations", () => {
     expect(tableNames).toContain("sessions");
     expect(tableNames).toContain("chunks");
     expect(tableNames).toContain("chunks_fts");
+    expect(tableNames).toContain("metadata");
   });
 
   test("insertSession + search finds it", () => {
@@ -434,6 +437,17 @@ describe("Database operations", () => {
     expect(stats.sessionCount).toBe(1);
     expect(stats.chunkCount).toBe(3);
     expect(stats.dbSizeBytes).toBeGreaterThan(0);
+    expect(stats.lastSyncAt).toBeNull();
+  });
+
+  test("setMetadata + getMetadata works", () => {
+    db = openDatabase(dbPath);
+
+    const value = "2026-02-17T10:00:00.000Z";
+    setMetadata(db, "last_sync_at", value);
+
+    expect(getMetadata(db, "last_sync_at")).toBe(value);
+    expect(getStats(db).lastSyncAt).toBe(value);
   });
 
   test("dropAll clears everything", () => {

@@ -27,6 +27,7 @@ export default async function statusCommand(_args: string[]): Promise<void> {
     console.log(`  Sessions: ${formatNumber(stats.sessionCount)}`);
     console.log(`  Chunks:   ${formatNumber(stats.chunkCount)}`);
     console.log(`  Database: ${sizeMB} MB`);
+    console.log(`  Last sync: ${stats.lastSyncAt ?? "never"}`);
     console.log(`  Location: ${dbPath}`);
   } finally {
     db.close();

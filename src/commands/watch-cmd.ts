@@ -6,7 +6,7 @@ import { type FSWatcher, mkdirSync, watch } from "node:fs";
 import { join } from "node:path";
 import { indexSessions } from "../indexer/index";
 import { PiParser } from "../parsers/pi";
-import { type Database, openDatabase } from "../storage/db";
+import { type Database, openDatabase, setMetadata } from "../storage/db";
 import { expandPath, loadConfig } from "../utils/config";
 import { getXDGPaths } from "../utils/xdg";
 
@@ -217,6 +217,9 @@ async function runIndexing(
   sources: Array<{ path: string; parser: string }>,
 ): Promise<void> {
   const timestamp = new Date().toISOString();
+  let totalAdded = 0;
+  let totalUpdated = 0;
+  let totalErrors = 0;
 
   for (const source of sources) {
     const expandedPath = expandPath(source.path);
@@ -229,6 +232,9 @@ async function runIndexing(
 
     try {
       const result = await indexSessions(state.db, expandedPath, parser);
+      totalAdded += result.added;
+      totalUpdated += result.updated;
+      totalErrors += result.errors;
 
       // Log to stderr (human-readable)
       console.error(
@@ -253,6 +259,8 @@ async function runIndexing(
         }),
       );
     } catch (error) {
+      totalErrors += 1;
+
       console.error(
         "[%s] Error indexing %s: %s",
         timestamp,
@@ -269,5 +277,9 @@ async function runIndexing(
         }),
       );
     }
+  }
+
+  if (totalErrors === 0 && totalAdded + totalUpdated > 0) {
+    setMetadata(state.db, "last_sync_at", new Date().toISOString());
   }
 }

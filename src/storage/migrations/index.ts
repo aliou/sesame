@@ -1,5 +1,6 @@
 import type { Database } from "../db";
 import addIsError from "./001-add-is-error";
+import addMetadata from "./002-add-metadata";
 
 export interface Migration {
   id: number;
@@ -17,4 +18,4 @@ export interface Migration {
  *   definitions so that fresh databases are created correctly without
  *   running migrations.
  */
-export const migrations: Migration[] = [addIsError];
+export const migrations: Migration[] = [addIsError, addMetadata];

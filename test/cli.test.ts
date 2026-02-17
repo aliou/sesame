@@ -73,6 +73,7 @@ describe("compiled binary", () => {
       expect(stdout).toContain("Sessions: 0");
       expect(stdout).toContain("Chunks:");
       expect(stdout).toContain("Database:");
+      expect(stdout).toContain("Last sync: never");
     } finally {
       rmSync(tmpRoot, { recursive: true, force: true });
     }

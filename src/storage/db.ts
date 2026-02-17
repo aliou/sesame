@@ -104,6 +104,12 @@ CREATE TABLE IF NOT EXISTS chunks (
   is_error INTEGER DEFAULT NULL
 );
 
+CREATE TABLE IF NOT EXISTS metadata (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
   content,
   content='chunks',
@@ -578,12 +584,14 @@ export function getStats(db: Database): {
   sessionCount: number;
   chunkCount: number;
   dbSizeBytes: number;
+  lastSyncAt: string | null;
 } {
   const sessionCountStmt = db.prepare("SELECT COUNT(*) as count FROM sessions");
   const chunkCountStmt = db.prepare("SELECT COUNT(*) as count FROM chunks");
 
   const sessionCount = (sessionCountStmt.get() as { count: number }).count;
   const chunkCount = (chunkCountStmt.get() as { count: number }).count;
+  const lastSyncAt = getMetadata(db, "last_sync_at");
 
   // Get database file size
   const dbPath = db.location?.() ?? db.filename;
@@ -597,7 +605,25 @@ export function getStats(db: Database): {
     // If file doesn't exist or can't be read, size is 0
   }
 
-  return { sessionCount, chunkCount, dbSizeBytes };
+  return { sessionCount, chunkCount, dbSizeBytes, lastSyncAt };
+}
+
+export function getMetadata(db: Database, key: string): string | null {
+  const stmt = db.prepare("SELECT value FROM metadata WHERE key = ?");
+  const row = stmt.get(key) as { value: string } | undefined;
+  return row?.value ?? null;
+}
+
+export function setMetadata(db: Database, key: string, value: string): void {
+  const stmt = db.prepare(`
+    INSERT INTO metadata (key, value, updated_at)
+    VALUES (?, ?, datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET
+      value = excluded.value,
+      updated_at = datetime('now')
+  `);
+
+  stmt.run(key, value);
 }
 
 export function dropAll(db: Database): void {
@@ -615,6 +641,7 @@ export function dropAll(db: Database): void {
   db.exec("DROP TABLE IF EXISTS chunks_fts");
   db.exec("DROP TABLE IF EXISTS chunks");
   db.exec("DROP TABLE IF EXISTS sessions");
+  db.exec("DROP TABLE IF EXISTS metadata");
   db.exec("DROP TABLE IF EXISTS schema_migrations");
 
   // Recreate schema and mark all migrations as applied
