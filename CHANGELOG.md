@@ -1,5 +1,11 @@
 # @aliou/sesame
 
+## 0.5.2
+
+### Patch Changes
+
+- f64dd16: Add `Last sync` to `sesame status` using durable metadata and update it only after successful indexing runs with actual changes.
+
 ## 0.5.1
 
 ### Patch Changes
