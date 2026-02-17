@@ -9,6 +9,7 @@
 - Run all tests: `pnpm test`
 - Run one file: `pnpm test src/utils/date.test.ts`
 - Run one test: `pnpm test src/utils/date.test.ts -- -t "Invalid input throws"`
+- Git hooks (Husky): pre-push runs `check:lockfile`, `lint`, `typecheck`.
 ## Architecture / codebase
 - `src/sesame.ts`: CLI entrypoint, lazy-dispatches `index|search|status|watch`.
 - `src/commands/*-cmd.ts`: CLI arg parsing + user output.

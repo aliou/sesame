@@ -7,10 +7,10 @@ import {
   getStats,
   insertSession,
   openDatabase,
-  setMetadata,
   type StoredChunk,
   type StoredSession,
   search,
+  setMetadata,
 } from "./db.ts";
 
 describe("Database operations", () => {
