@@ -17,6 +17,12 @@
 - `src/indexer/index.ts` + `src/indexer/format-tool-call.ts`: scan sources, mtime-incremental index, create `message` + `tool_call` chunks.
 - `src/storage/db.ts`: schema (`sessions`, `chunks`, `chunks_fts`), BM25 search, filters (`cwd`, date, tool, path, limit).
 - `share/pi-extension/src`: pi extension exposing `sesame_search` (`sesame search --json`).
+## Docs map
+- `README.md`: project overview + quickstart.
+- `docs/cli-usage.md`: CLI commands/flags/examples.
+- `docs/indexing.md`: parser/indexer/chunking/schema behavior.
+- `docs/library-usage.md`: exported API and programmatic usage.
+- `docs/README.md`: docs index.
 ## Style / conventions
 - Imports: ESM, use `node:` built-ins, `import type` for types, imports at top (`no-inline-imports`), keep intentional dynamic import in `src/sesame.ts`.
 - Formatting: Biome defaults (2 spaces, double quotes, organized imports).

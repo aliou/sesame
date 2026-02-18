@@ -1,53 +1,71 @@
 ---
 name: sesame
-description: Search past coding sessions using Sesame's BM25 full-text search. Use when you need to find previous sessions by topic, concept, or keyword -- especially multi-word queries that find_sessions struggles with.
+description: Search past coding sessions with Sesame BM25 search. Use for multi-word topic queries, tool-call searches, or listing recent sessions when find_sessions is too strict.
 ---
 
 # Sesame - Session Search
 
-Sesame indexes coding agent sessions into a SQLite FTS5 database for BM25 full-text search. It finds sessions by topic, concept, or keyword without requiring exact phrase matches.
+Sesame indexes coding agent sessions into SQLite FTS5 and ranks results with BM25.
 
-## When to Use Sesame vs find_sessions
+## When to use
 
-Use **sesame** for multi-word concept queries:
-- "nix infrastructure simplify"
-- "carousel company website"
-- "CI pipeline publish release workflow"
+Use **sesame** when you need:
+- Multi-word topic search (`"nix infra cleanup"`, `"publish workflow changesets"`)
+- Tool-call oriented search (`--tools`, `--tool bash`, `--path package.json`)
+- Session discovery / paging (`"*"` with filters and `--exclude`)
 
-Use **find_sessions** for single exact keywords or proper nouns:
-- "Fizen", "bird", "grit"
+Use **find_sessions** for quick exact keyword lookups.
+Use **read_session** after you identified the session to inspect.
 
-## CLI Usage
+## CLI
 
-Search sessions:
+### Search
+
 ```bash
 sesame search "query"
-sesame search "query" --json          # JSON output
-sesame search "query" --cwd /path     # Filter by project directory
-sesame search "query" --after 7d      # Sessions from last 7 days
+sesame search "query" --json
+sesame search "query" --cwd /path/to/project
+sesame search "query" --after 7d
 sesame search "query" --before 2026-01-01
 sesame search "query" --limit 5
+sesame search "query" --tools
+sesame search "query" --tool bash
+sesame search "query" --path package.json
+sesame search "query" --exclude <session-id> --exclude <session-id>
 ```
 
-Index sessions (run before first search, or to pick up new sessions):
+Special query to list sessions instead of full-text match:
+
 ```bash
-sesame index          # Incremental (only new/changed files)
-sesame index --full   # Full rebuild
+sesame search "*" --limit 20
+sesame search "*" --cwd /path --after 2w --exclude <session-id>
 ```
 
-Check index status:
+### Index / status / watch
+
 ```bash
+sesame index
+sesame index --full
 sesame status
+sesame watch
+sesame watch --interval 30
 ```
 
-## Workflow
+## Practical workflow
 
-1. If search returns no results, run `sesame index` first to ensure the index is up to date.
-2. Use `--json` when you need structured data for further processing.
-3. Results are ranked by BM25 relevance. The score (0-1) indicates match quality.
-4. The matched snippet shows the most relevant chunk from each session.
+1. Run `sesame search "query"`.
+2. If results are empty or stale, run `sesame index`.
+3. Narrow using `--cwd`, `--after`, `--before`, `--tools`, `--tool`, or `--path`.
+4. Use `--exclude` to page through additional results across repeated searches.
+5. Use `--json` when another tool/agent needs structured output.
 
-## Date Filters
+## Date formats
 
-Relative dates: `7d` (7 days), `2w` (2 weeks), `1m` (1 month).
-Absolute dates: ISO format like `2026-01-15`.
+- Relative: `7d`, `2w`, `1m`
+- Absolute: `YYYY-MM-DD` (ISO date)
+
+## Notes
+
+- Scores are normalized to `0.00-1.00` for display. Higher is better.
+- `sesame watch` runs an initial index pass, then re-indexes on change.
+- The `sesame_search` pi extension tool exposes only: `query`, `cwd`, `after`, `before`, `limit`.
