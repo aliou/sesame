@@ -1,7 +1,7 @@
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 function getBunTarget(): string | null {
   const archMap: Record<string, string> = {
@@ -29,18 +29,21 @@ describe("compiled binary", () => {
     const outFile = join(tmpRoot, "sesame-test-binary");
 
     try {
-      const build = Bun.spawnSync([
-        "bun",
-        "build",
-        "--compile",
-        `--target=${target}`,
-        `--outfile=${outFile}`,
-        "src/sesame.ts",
-      ], {
-        cwd: root,
-        stdout: "pipe",
-        stderr: "pipe",
-      });
+      const build = Bun.spawnSync(
+        [
+          "bun",
+          "build",
+          "--compile",
+          `--target=${target}`,
+          `--outfile=${outFile}`,
+          "sesame.ts",
+        ],
+        {
+          cwd: root,
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
 
       expect(build.exitCode).toBe(0);
 

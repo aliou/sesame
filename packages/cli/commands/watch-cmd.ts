@@ -4,11 +4,16 @@
 
 import { type FSWatcher, mkdirSync, watch } from "node:fs";
 import { join } from "node:path";
-import { indexSessions } from "../indexer/index";
-import { PiParser } from "../parsers/pi";
-import { type Database, openDatabase, setMetadata } from "../storage/db";
-import { expandPath, loadConfig } from "../utils/config";
-import { getXDGPaths } from "../utils/xdg";
+import {
+  type Database,
+  expandPath,
+  getXDGPaths,
+  indexSessions,
+  loadConfig,
+  openDatabase,
+  PiParser,
+  setMetadata,
+} from "@aliou/sesame";
 
 interface WatchState {
   db: Database;

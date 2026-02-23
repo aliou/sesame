@@ -92,7 +92,7 @@ jobs:
         if: steps.changesets.outputs.published == 'true'
         id: version
         run: |
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION=$(node -p "require('./packages/sesame/package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Setup Bun
@@ -101,7 +101,7 @@ jobs:
 
       - name: Build binaries
         if: steps.changesets.outputs.published == 'true'
-        run: bun run build:binary
+        run: pnpm run build:binary
 
       - name: Create GitHub Release
         if: steps.changesets.outputs.published == 'true'
@@ -110,10 +110,10 @@ jobs:
           TAG: v${{ steps.version.outputs.version }}
         run: |
           if gh release view "$TAG" &>/dev/null; then
-            gh release upload "$TAG" dist/sesame-* --clobber
+            gh release upload "$TAG" packages/cli/dist/sesame-* --clobber
           else
             gh release create "$TAG" \
               --title "$TAG" \
               --generate-notes \
-              dist/sesame-*
+              packages/cli/dist/sesame-*
           fi

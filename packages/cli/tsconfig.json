@@ -5,19 +5,24 @@
     "lib": ["ES2022"],
     "moduleResolution": "bundler",
     "types": ["node"],
+
+    "outDir": "./dist",
+    "rootDir": ".",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true,
+
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "noEmit": true
+    "noEmit": false
   },
+  "include": ["sesame.ts", "commands/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"],
   "references": [
-    { "path": "packages/sesame" },
-    { "path": "packages/cli" }
-  ],
-  "files": []
+    { "path": "../sesame" }
+  ]
 }

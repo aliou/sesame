@@ -4,8 +4,7 @@
 
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { getStats, openDatabase } from "../storage/db";
-import { getXDGPaths } from "../utils/xdg";
+import { getStats, getXDGPaths, openDatabase } from "@aliou/sesame";
 
 export default async function statusCommand(_args: string[]): Promise<void> {
   const paths = getXDGPaths();

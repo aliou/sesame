@@ -6,6 +6,7 @@ export type { IndexResult } from "./indexer/index";
 export { indexSessions } from "./indexer/index";
 export { PiParser } from "./parsers/pi";
 export type {
+  Database,
   SearchOptions,
   SearchResult,
   StoredChunk,
@@ -20,6 +21,7 @@ export {
   insertSession,
   openDatabase,
   search,
+  setMetadata,
 } from "./storage/db";
 export type {
   ParsedSession,

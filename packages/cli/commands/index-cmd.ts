@@ -4,11 +4,16 @@
 
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { indexSessions } from "../indexer/index";
-import { PiParser } from "../parsers/pi";
-import { dropAll, openDatabase, setMetadata } from "../storage/db";
-import { expandPath, loadConfig } from "../utils/config";
-import { getXDGPaths } from "../utils/xdg";
+import {
+  dropAll,
+  expandPath,
+  getXDGPaths,
+  indexSessions,
+  loadConfig,
+  openDatabase,
+  PiParser,
+  setMetadata,
+} from "@aliou/sesame";
 
 export default async function indexCommand(args: string[]): Promise<void> {
   // Parse --full flag

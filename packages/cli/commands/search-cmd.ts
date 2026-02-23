@@ -3,10 +3,14 @@
  */
 
 import { join } from "node:path";
-import { openDatabase, type SearchOptions, search } from "../storage/db";
-import { loadConfig } from "../utils/config";
-import { parseRelativeDate } from "../utils/date";
-import { getXDGPaths } from "../utils/xdg";
+import {
+  getXDGPaths,
+  loadConfig,
+  openDatabase,
+  parseRelativeDate,
+  type SearchOptions,
+  search,
+} from "@aliou/sesame";
 
 function normalizeScore(rawScore: number): string {
   // BM25 returns negative scores where more negative = better match
