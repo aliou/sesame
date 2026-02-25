@@ -1,7 +1,8 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.3.14/schema.json",
   "plugins": [
-    "./node_modules/@aliou/biome-plugins/plugins/no-inline-imports.grit"
+    "./node_modules/@aliou/biome-plugins/plugins/no-inline-imports.grit",
+    "./node_modules/@aliou/biome-plugins/plugins/no-js-import-extension.grit"
   ],
   "vcs": {
     "enabled": true,
