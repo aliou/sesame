@@ -17,6 +17,7 @@ interface SessionHeader {
   id: string;
   timestamp: string;
   cwd?: string;
+  parentSession?: string;
 }
 
 interface SessionInfo {
@@ -27,6 +28,12 @@ interface SessionInfo {
 interface TextContent {
   type: "text";
   text: string;
+}
+
+interface ImageContent {
+  type: "image";
+  data: string;
+  mimeType: string;
 }
 
 interface ToolCallContent {
@@ -41,48 +48,141 @@ interface ThinkingContent {
   thinking: string;
 }
 
-type ContentBlock = TextContent | ToolCallContent | ThinkingContent;
+type ContentBlock =
+  | TextContent
+  | ImageContent
+  | ToolCallContent
+  | ThinkingContent;
 
 interface UserMessage {
   type: "message";
+  id: string;
+  parentId: string | null;
+  timestamp: string;
   message: {
     role: "user";
-    content: ContentBlock[];
+    content: string | ContentBlock[];
+    timestamp?: number;
   };
 }
 
 interface AssistantMessage {
   type: "message";
+  id: string;
+  parentId: string | null;
+  timestamp: string;
   message: {
     role: "assistant";
     content: ContentBlock[];
+    provider?: string;
+    model?: string;
+    usage?: {
+      input: number;
+      output: number;
+      cacheRead: number;
+      cacheWrite: number;
+      totalTokens: number;
+      cost: { total: number };
+    };
+    stopReason?: string;
+    timestamp?: number;
   };
 }
 
 interface ToolResultMessage {
   type: "message";
+  id: string;
+  parentId: string | null;
+  timestamp: string;
   message: {
     role: "toolResult";
     toolCallId: string;
     toolName: string;
     isError?: boolean;
     content: ContentBlock[];
+    timestamp?: number;
   };
 }
 
 interface BashExecutionMessage {
   type: "message";
+  id: string;
+  parentId: string | null;
+  timestamp: string;
   message: {
     role: "bashExecution";
     command: string;
     output: string;
-    exitCode: number;
+    exitCode?: number;
+    cancelled?: boolean;
+    truncated?: boolean;
+    timestamp?: number;
   };
 }
 
-interface CompactionLine {
+interface CompactionEntry {
   type: "compaction";
+  id: string;
+  parentId: string | null;
+  timestamp: string;
   summary: string;
+  firstKeptEntryId?: string;
+  tokensBefore?: number;
+}
+
+interface BranchSummaryEntry {
+  type: "branch_summary";
+  id: string;
+  parentId: string | null;
+  timestamp: string;
+  fromId: string;
+  summary: string;
+}
+
+interface CustomEntry {
+  type: "custom";
+  customType: string;
+  data?: unknown;
+  id: string;
+  parentId: string | null;
+  timestamp: string;
+}
+
+interface CustomMessageEntry {
+  type: "custom_message";
+  customType: string;
+  content: string | ContentBlock[];
+  display: boolean;
+  details?: unknown;
+  id: string;
+  parentId: string | null;
+  timestamp: string;
+}
+
+interface ModelChangeEntry {
+  type: "model_change";
+  id: string;
+  parentId: string | null;
+  timestamp: string;
+  provider: string;
+  modelId: string;
+}
+
+interface ThinkingLevelChangeEntry {
+  type: "thinking_level_change";
+  id: string;
+  parentId: string | null;
+  timestamp: string;
+  thinkingLevel: string;
+}
+
+interface LabelEntry {
+  type: "label";
+  id: string;
+  parentId: string | null;
+  timestamp: string;
+  targetId: string;
+  label?: string;
 }
 
 type JSONLLine =
@@ -92,8 +192,39 @@ type JSONLLine =
   | AssistantMessage
   | ToolResultMessage
   | BashExecutionMessage
-  | CompactionLine
-  | { type: "model_change" | "thinking_level_change" | "custom" };
+  | CompactionEntry
+  | BranchSummaryEntry
+  | CustomEntry
+  | CustomMessageEntry
+  | ModelChangeEntry
+  | ThinkingLevelChangeEntry
+  | LabelEntry;
+
+/**
+ * Extract text content from content blocks
+ */
+function extractTextContent(content: string | ContentBlock[]): string {
+  if (typeof content === "string") {
+    return content;
+  }
+  return content
+    .filter((c): c is TextContent => c.type === "text")
+    .map((c) => c.text)
+    .join("\n");
+}
+
+/**
+ * Extract session ID from a Pi session file path.
+ * Pi session filenames contain the UUID: 2026-02-23T08-52-01-947Z_34f5d893-8206-4593-a056-9a9093076a17.jsonl
+ */
+function extractSessionIdFromPath(path: string): string | undefined {
+  const filename = basename(path, ".jsonl");
+  const underscoreIndex = filename.lastIndexOf("_");
+  if (underscoreIndex !== -1) {
+    return filename.slice(underscoreIndex + 1);
+  }
+  return undefined;
+}
 
 export class PiParser implements SessionParser {
   id = "pi";
@@ -128,6 +259,7 @@ export class PiParser implements SessionParser {
     let sessionCwd: string | undefined;
     let sessionName: string | undefined;
     let createdAt = new Date().toISOString();
+    let parentSessionId: string | undefined;
     const modifiedAt = fileStat.mtime.toISOString();
     const turns: Turn[] = [];
 
@@ -141,6 +273,10 @@ export class PiParser implements SessionParser {
             sessionId = header.id;
             sessionCwd = header.cwd;
             createdAt = header.timestamp;
+            // Extract parent session ID from path if present
+            if (header.parentSession) {
+              parentSessionId = extractSessionIdFromPath(header.parentSession);
+            }
             break;
           }
 
@@ -157,17 +293,22 @@ export class PiParser implements SessionParser {
               | ToolResultMessage
               | BashExecutionMessage;
 
+            const baseTurn = {
+              entryId: msg.id,
+              parentEntryId: msg.parentId ?? undefined,
+              timestamp: msg.timestamp,
+              sourceType: "message" as const,
+            };
+
             if (msg.message.role === "user") {
               const userMsg = msg as UserMessage;
-              const textBlocks = userMsg.message.content.filter(
-                (c): c is TextContent => c.type === "text",
-              );
-              const textContent = textBlocks.map((c) => c.text).join("\n");
+              const textContent = extractTextContent(userMsg.message.content);
               turns.push({
                 role: "user",
                 textContent,
                 codeBlocks: [],
                 toolCalls: [],
+                ...baseTurn,
               });
             } else if (msg.message.role === "assistant") {
               const assistantMsg = msg as AssistantMessage;
@@ -189,13 +330,13 @@ export class PiParser implements SessionParser {
                 textContent,
                 codeBlocks: [],
                 toolCalls,
+                ...baseTurn,
               });
             } else if (msg.message.role === "toolResult") {
               const toolResultMsg = msg as ToolResultMessage;
-              const textBlocks = toolResultMsg.message.content.filter(
-                (c): c is TextContent => c.type === "text",
+              const textContent = extractTextContent(
+                toolResultMsg.message.content,
               );
-              const textContent = textBlocks.map((c) => c.text).join("\n");
               turns.push({
                 role: "system",
                 textContent,
@@ -203,6 +344,7 @@ export class PiParser implements SessionParser {
                 toolCalls: [],
                 toolName: toolResultMsg.message.toolName,
                 isError: toolResultMsg.message.isError ?? false,
+                ...baseTurn,
               });
             } else if (msg.message.role === "bashExecution") {
               const bashMsg = msg as BashExecutionMessage;
@@ -212,18 +354,57 @@ export class PiParser implements SessionParser {
                 textContent,
                 codeBlocks: [],
                 toolCalls: [],
+                ...baseTurn,
               });
             }
             break;
           }
 
+          case "custom_message": {
+            const customMsg = parsed as CustomMessageEntry;
+            const textContent = extractTextContent(customMsg.content);
+            // Prefix with customType to make it searchable
+            const prefixedContent = `[${customMsg.customType}]\n${textContent}`;
+            turns.push({
+              role: "system",
+              textContent: prefixedContent,
+              codeBlocks: [],
+              toolCalls: [],
+              entryId: customMsg.id,
+              parentEntryId: customMsg.parentId ?? undefined,
+              timestamp: customMsg.timestamp,
+              sourceType: "custom_message",
+              customType: customMsg.customType,
+            });
+            break;
+          }
+
           case "compaction": {
-            const compaction = parsed as CompactionLine;
+            const compaction = parsed as CompactionEntry;
             turns.push({
               role: "system",
               textContent: compaction.summary,
               codeBlocks: [],
               toolCalls: [],
+              entryId: compaction.id,
+              parentEntryId: compaction.parentId ?? undefined,
+              timestamp: compaction.timestamp,
+              sourceType: "compaction",
+            });
+            break;
+          }
+
+          case "branch_summary": {
+            const branch = parsed as BranchSummaryEntry;
+            turns.push({
+              role: "system",
+              textContent: branch.summary,
+              codeBlocks: [],
+              toolCalls: [],
+              entryId: branch.id,
+              parentEntryId: branch.parentId ?? undefined,
+              timestamp: branch.timestamp,
+              sourceType: "branch_summary",
             });
             break;
           }
@@ -231,7 +412,8 @@ export class PiParser implements SessionParser {
           case "model_change":
           case "thinking_level_change":
           case "custom":
-            // Skip metadata lines
+          case "label":
+            // Skip metadata/extension state lines (not part of LLM context)
             break;
 
           default:
@@ -254,6 +436,7 @@ export class PiParser implements SessionParser {
       createdAt,
       modifiedAt,
       turns,
+      parentSessionId,
     };
   }
 }

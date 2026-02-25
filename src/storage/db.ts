@@ -28,6 +28,7 @@ export interface StoredSession {
   modified_at: string | null;
   message_count: number;
   file_mtime: number;
+  parent_session_id: string | null;
 }
 
 export interface StoredChunk {
@@ -39,6 +40,10 @@ export interface StoredChunk {
   seq: number;
   content: string;
   is_error: number | null; // 0 = success, 1 = error, null = not applicable
+  entry_id: string | null;
+  parent_entry_id: string | null;
+  timestamp: string | null;
+  source_type: string | null;
 }
 
 export interface SearchResult {
@@ -90,7 +95,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at TEXT,
   modified_at TEXT,
   message_count INTEGER,
-  file_mtime INTEGER
+  file_mtime INTEGER,
+  parent_session_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS chunks (
@@ -101,7 +107,11 @@ CREATE TABLE IF NOT EXISTS chunks (
   tool_name TEXT,
   seq INTEGER,
   content TEXT NOT NULL,
-  is_error INTEGER DEFAULT NULL
+  is_error INTEGER DEFAULT NULL,
+  entry_id TEXT,
+  parent_entry_id TEXT,
+  timestamp TEXT,
+  source_type TEXT
 );
 
 CREATE TABLE IF NOT EXISTS metadata (
@@ -133,6 +143,8 @@ END;
 CREATE INDEX IF NOT EXISTS idx_chunks_session ON chunks(session_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_kind ON chunks(kind);
 CREATE INDEX IF NOT EXISTS idx_chunks_tool ON chunks(tool_name);
+CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id);
+CREATE INDEX IF NOT EXISTS idx_chunks_entry ON chunks(entry_id);
 `;
 
 const IS_BUN_RUNTIME =
@@ -247,13 +259,13 @@ export function insertSession(
   chunks: StoredChunk[],
 ): void {
   const insertSessionStmt = db.prepare(
-    `INSERT INTO sessions (id, source, path, cwd, name, created_at, modified_at, message_count, file_mtime)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO sessions (id, source, path, cwd, name, created_at, modified_at, message_count, file_mtime, parent_session_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
 
   const insertChunkStmt = db.prepare(
-    `INSERT INTO chunks (session_id, kind, role, tool_name, seq, content, is_error)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO chunks (session_id, kind, role, tool_name, seq, content, is_error, entry_id, parent_entry_id, timestamp, source_type)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
 
   db.exec("BEGIN");
@@ -268,6 +280,7 @@ export function insertSession(
       session.modified_at,
       session.message_count,
       session.file_mtime,
+      session.parent_session_id,
     );
 
     for (const chunk of chunks) {
@@ -279,6 +292,10 @@ export function insertSession(
         chunk.seq,
         chunk.content,
         chunk.is_error,
+        chunk.entry_id,
+        chunk.parent_entry_id,
+        chunk.timestamp,
+        chunk.source_type,
       );
     }
 

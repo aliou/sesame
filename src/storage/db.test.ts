@@ -69,6 +69,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-15T11:00:00Z",
       message_count: 2,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     const chunks: StoredChunk[] = [
@@ -81,6 +82,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "How do I write a test?",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
       {
         id: 0,
@@ -91,6 +96,10 @@ describe("Database operations", () => {
         seq: 1,
         content: "You can use the test framework to write tests.",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
     ];
 
@@ -119,6 +128,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-15T10:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     const chunks1: StoredChunk[] = [
@@ -132,6 +142,10 @@ describe("Database operations", () => {
         content:
           "How do I optimize database queries? I need help with database performance and database indexing.",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
     ];
 
@@ -146,6 +160,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-15T11:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     const chunks2: StoredChunk[] = [
@@ -158,6 +173,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "The database mentioned in passing.",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
     ];
 
@@ -184,6 +203,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-15T10:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     const session2: StoredSession = {
@@ -196,6 +216,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-15T10:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     const chunks: StoredChunk[] = [
@@ -208,6 +229,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "testing content",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
       {
         id: 0,
@@ -218,6 +243,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "testing content",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
     ];
 
@@ -243,6 +272,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-01T10:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     const session2: StoredSession = {
@@ -255,6 +285,7 @@ describe("Database operations", () => {
       modified_at: "2026-02-01T10:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     const chunks: StoredChunk[] = [
@@ -267,6 +298,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "testing filter",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
       {
         id: 0,
@@ -277,6 +312,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "testing filter",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
     ];
 
@@ -309,6 +348,7 @@ describe("Database operations", () => {
         modified_at: "2026-01-15T10:00:00Z",
         message_count: 1,
         file_mtime: Date.now(),
+        parent_session_id: null,
       };
 
       const chunks: StoredChunk[] = [
@@ -321,6 +361,10 @@ describe("Database operations", () => {
           seq: 0,
           content: "common search term",
           is_error: null,
+          entry_id: null,
+          parent_entry_id: null,
+          timestamp: null,
+          source_type: null,
         },
       ];
 
@@ -345,6 +389,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-15T10:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     const chunks: StoredChunk[] = [
@@ -357,6 +402,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "test content",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
     ];
 
@@ -395,6 +444,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-15T10:00:00Z",
       message_count: 3,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     const chunks: StoredChunk[] = [
@@ -407,6 +457,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "chunk 1",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
       {
         id: 0,
@@ -417,6 +471,10 @@ describe("Database operations", () => {
         seq: 1,
         content: "chunk 2",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
       {
         id: 0,
@@ -427,6 +485,10 @@ describe("Database operations", () => {
         seq: 2,
         content: "chunk 3",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
     ];
 
@@ -464,6 +526,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-15T10:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     const chunks: StoredChunk[] = [
@@ -476,6 +539,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "test",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
     ];
 
@@ -515,6 +582,7 @@ describe("Database operations", () => {
         modified_at: `2026-01-${15 + i}T10:00:00Z`,
         message_count: 1,
         file_mtime: Date.now(),
+        parent_session_id: null,
       };
 
       const chunks: StoredChunk[] = [
@@ -527,6 +595,10 @@ describe("Database operations", () => {
           seq: 0,
           content: `content ${i}`,
           is_error: null,
+          entry_id: null,
+          parent_entry_id: null,
+          timestamp: null,
+          source_type: null,
         },
       ];
 
@@ -553,6 +625,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-01T10:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     const session2: StoredSession = {
@@ -565,6 +638,7 @@ describe("Database operations", () => {
       modified_at: "2026-02-01T10:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     const chunks: StoredChunk[] = [
@@ -577,6 +651,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "content 1",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
       {
         id: 0,
@@ -587,6 +665,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "content 2",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
     ];
 
@@ -617,6 +699,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-01T10:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     const session2: StoredSession = {
@@ -629,6 +712,7 @@ describe("Database operations", () => {
       modified_at: "2026-03-01T10:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     const session3: StoredSession = {
@@ -641,6 +725,7 @@ describe("Database operations", () => {
       modified_at: "2026-02-01T10:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     const chunks: StoredChunk[] = [
@@ -653,6 +738,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "content 1",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
       {
         id: 0,
@@ -663,6 +752,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "content 2",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
       {
         id: 0,
@@ -673,6 +766,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "content 3",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
     ];
 
@@ -703,6 +800,7 @@ describe("Database operations", () => {
         modified_at: "2026-03-01T10:00:00Z",
         message_count: 1,
         file_mtime: Date.now(),
+        parent_session_id: null,
       },
       [
         {
@@ -714,6 +812,10 @@ describe("Database operations", () => {
           seq: 0,
           content: "shared content",
           is_error: null,
+          entry_id: null,
+          parent_entry_id: null,
+          timestamp: null,
+          source_type: null,
         },
       ],
     );
@@ -730,6 +832,7 @@ describe("Database operations", () => {
         modified_at: "2026-02-01T10:00:00Z",
         message_count: 1,
         file_mtime: Date.now(),
+        parent_session_id: null,
       },
       [
         {
@@ -741,6 +844,10 @@ describe("Database operations", () => {
           seq: 0,
           content: "shared content",
           is_error: null,
+          entry_id: null,
+          parent_entry_id: null,
+          timestamp: null,
+          source_type: null,
         },
       ],
     );
@@ -769,6 +876,7 @@ describe("Database operations", () => {
         modified_at: "2026-01-01T10:00:00Z",
         message_count: 1,
         file_mtime: Date.now(),
+        parent_session_id: null,
       },
       [
         {
@@ -780,6 +888,10 @@ describe("Database operations", () => {
           seq: 0,
           content: "alpha alpha alpha alpha alpha",
           is_error: null,
+          entry_id: null,
+          parent_entry_id: null,
+          timestamp: null,
+          source_type: null,
         },
       ],
     );
@@ -796,6 +908,7 @@ describe("Database operations", () => {
         modified_at: "2026-01-02T10:00:00Z",
         message_count: 1,
         file_mtime: Date.now(),
+        parent_session_id: null,
       },
       [
         {
@@ -807,6 +920,10 @@ describe("Database operations", () => {
           seq: 0,
           content: "alpha",
           is_error: null,
+          entry_id: null,
+          parent_entry_id: null,
+          timestamp: null,
+          source_type: null,
         },
       ],
     );
@@ -840,6 +957,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-15T10:00:00Z",
       message_count: 2,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     const session2: StoredSession = {
@@ -852,6 +970,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-15T11:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     insertSession(db, session1, [
@@ -864,6 +983,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "help me write a file",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
       {
         id: 0,
@@ -874,6 +997,10 @@ describe("Database operations", () => {
         seq: 1,
         content: "tool: Bash\ncommand: ls -la",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
     ]);
 
@@ -887,6 +1014,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "just chatting",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
     ]);
 
@@ -909,6 +1040,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-15T10:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     const session2: StoredSession = {
@@ -921,6 +1053,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-15T11:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     insertSession(db, session1, [
@@ -933,6 +1066,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "tool: Write\npath: test.txt",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
     ]);
 
@@ -946,6 +1083,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "just a message",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
     ]);
 
@@ -967,6 +1108,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-15T10:00:00Z",
       message_count: 2,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     const session2: StoredSession = {
@@ -979,6 +1121,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-15T11:00:00Z",
       message_count: 2,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     insertSession(db, session1, [
@@ -991,6 +1134,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "tool: Bash\ncommand: exit 1",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
       {
         id: 0,
@@ -1001,6 +1148,10 @@ describe("Database operations", () => {
         seq: 1,
         content: "Command failed with exit code 1",
         is_error: 1,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
     ]);
 
@@ -1014,6 +1165,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "tool: Bash\ncommand: echo hello",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
       {
         id: 0,
@@ -1024,6 +1179,10 @@ describe("Database operations", () => {
         seq: 1,
         content: "hello",
         is_error: 0,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
     ]);
 
@@ -1054,6 +1213,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-15T10:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     insertSession(db, session, [
@@ -1066,6 +1226,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "just a message",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
     ]);
 
@@ -1088,6 +1252,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-15T10:00:00Z",
       message_count: 2,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     const session2: StoredSession = {
@@ -1100,6 +1265,7 @@ describe("Database operations", () => {
       modified_at: "2026-01-15T11:00:00Z",
       message_count: 2,
       file_mtime: Date.now(),
+      parent_session_id: null,
     };
 
     insertSession(db, session1, [
@@ -1112,6 +1278,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "tool: Bash\ncommand: deploy application",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
       {
         id: 0,
@@ -1122,6 +1292,10 @@ describe("Database operations", () => {
         seq: 1,
         content: "deploy failed",
         is_error: 1,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
     ]);
 
@@ -1135,6 +1309,10 @@ describe("Database operations", () => {
         seq: 0,
         content: "tool: Bash\ncommand: deploy application",
         is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
       {
         id: 0,
@@ -1145,6 +1323,10 @@ describe("Database operations", () => {
         seq: 1,
         content: "deploy succeeded",
         is_error: 0,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: null,
       },
     ]);
 

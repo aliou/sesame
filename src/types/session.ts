@@ -29,6 +29,16 @@ export interface Turn {
   toolName?: string;
   /** Whether this tool result represents an error (only for tool result turns) */
   isError?: boolean;
+  /** Entry ID from the JSONL (for tree structure) */
+  entryId?: string;
+  /** Parent entry ID from the JSONL (for tree structure) */
+  parentEntryId?: string;
+  /** ISO timestamp from the entry */
+  timestamp?: string;
+  /** Source entry type (message, custom_message, compaction, etc.) */
+  sourceType?: string;
+  /** Custom type identifier for custom_message entries */
+  customType?: string;
 }
 
 export interface ParsedSession {
@@ -42,6 +52,8 @@ export interface ParsedSession {
   createdAt: string;
   modifiedAt: string;
   turns: Turn[];
+  /** ID of parent session (if this session was forked from another) */
+  parentSessionId?: string;
 }
 
 /**

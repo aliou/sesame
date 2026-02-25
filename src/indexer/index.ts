@@ -114,6 +114,7 @@ export async function indexSessions(
         modified_at: parsedSession.modifiedAt ?? null,
         message_count: parsedSession.turns.length,
         file_mtime: fileMtime,
+        parent_session_id: parsedSession.parentSessionId ?? null,
       };
 
       // Build chunks from turns: message chunks + tool call chunks
@@ -132,6 +133,10 @@ export async function indexSessions(
             content: turn.textContent,
             is_error:
               turn.isError !== undefined ? (turn.isError ? 1 : 0) : null,
+            entry_id: turn.entryId ?? null,
+            parent_entry_id: turn.parentEntryId ?? null,
+            timestamp: turn.timestamp ?? null,
+            source_type: turn.sourceType ?? null,
           });
         }
 
@@ -148,6 +153,10 @@ export async function indexSessions(
               seq: seq++,
               content,
               is_error: null,
+              entry_id: turn.entryId ?? null,
+              parent_entry_id: turn.parentEntryId ?? null,
+              timestamp: turn.timestamp ?? null,
+              source_type: turn.sourceType ?? null,
             });
           }
         }
