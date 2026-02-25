@@ -1,5 +1,16 @@
 # @aliou/sesame
 
+## 0.6.0
+
+### Minor Changes
+
+- 5e1475e: Add support for session forks and custom_message entries
+
+  - Parse and index `custom_message` entries (extension-injected LLM context)
+  - Track session fork relationships via `parent_session_id`
+  - Track entry tree structure via `entry_id`, `parent_entry_id`, `timestamp`, `source_type` on chunks
+  - Add database migration for new columns
+
 ## 0.5.2
 
 ### Patch Changes
