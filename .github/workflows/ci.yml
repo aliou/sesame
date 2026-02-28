@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 25
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -32,3 +32,56 @@ jobs:
 
       - name: Test
         run: pnpm run test
+
+  build-binary:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x64
+            artifact: sesame-linux-x64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            artifact: sesame-linux-arm64
+          - os: macos-latest
+            arch: arm64
+            artifact: sesame-darwin-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 25
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build SEA binary
+        run: npx tsdown
+
+      - name: Verify binary was produced
+        run: |
+          if [ ! -f dist/sesame ]; then
+            echo "ERROR: SEA binary was not produced. tsdown may have silently failed."
+            echo "Contents of dist/:"
+            ls -la dist/
+            exit 1
+          fi
+
+      - name: Rename binary
+        run: mv dist/sesame dist/${{ matrix.artifact }}
+
+      - name: Smoke test
+        run: dist/${{ matrix.artifact }} help
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}

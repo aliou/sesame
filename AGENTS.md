@@ -1,5 +1,5 @@
 # AGENTS.md
-- Stack: Node.js (>=22.5) + TypeScript (ESM) + SQLite FTS5; pnpm for package management; Biome v2 for lint/format; vitest for tests.
+- Stack: Node.js (>=25) + TypeScript (ESM) + SQLite FTS5; pnpm for package management; Biome v2 for lint/format; vitest for tests.
 - Existing rule files in repo: none of CLAUDE.md/.cursorrules/.windsurfrules/.clinerules/.goosehints/.github/copilot-instructions.md.
 ## Build / lint / test
 - Install deps: `pnpm install`

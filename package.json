@@ -21,10 +21,10 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "build:binary": "bun run scripts/build.ts",
+    "build:binary": "node --disable-warning=ExperimentalWarning scripts/build.ts",
     "dev": "./bin/sesame",
     "test": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest run",
-    "test:cli": "bun test ./test/cli.test.ts",
+    "test:cli": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest run --config vitest.cli.config.ts",
     "lint": "biome check",
     "format": "biome check --write",
     "check:lockfile": "pnpm install --frozen-lockfile --ignore-scripts",
@@ -65,10 +65,11 @@
     "@changesets/cli": "^2.29.8",
     "@types/node": "^22.15.30",
     "husky": "^9.1.7",
+    "tsdown": "0.21.0-beta.2",
     "typescript": "^5.7.2",
     "vitest": "^4.0.18"
   },
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=25.0.0"
   }
 }

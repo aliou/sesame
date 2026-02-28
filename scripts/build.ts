@@ -1,22 +1,13 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 
-import { $ } from "bun";
-import { mkdir } from "node:fs/promises";
+/**
+ * Build a single-executable binary for the current platform using tsdown's
+ * Node.js SEA support. Cross-compilation is not supported by Node SEA, so
+ * CI runners are needed for other targets.
+ */
 
-const targets = [
-  { target: "bun-darwin-arm64", output: "sesame-darwin-arm64" },
-  { target: "bun-linux-arm64", output: "sesame-linux-arm64" },
-  { target: "bun-linux-x64", output: "sesame-linux-x64" },
-];
+import { execSync } from "node:child_process";
 
-// Ensure dist directory exists
-await mkdir("dist", { recursive: true });
-
-console.log("Building binaries...");
-
-for (const { target, output } of targets) {
-  console.log(`  → ${output} (${target})`);
-  await $`bun build --compile --minify --target=${target} --outfile=dist/${output} src/sesame.ts`;
-}
-
-console.log("✓ All binaries built successfully");
+console.log("Building binary for current platform...");
+execSync("npx tsdown", { stdio: "inherit" });
+console.log("Done.");
