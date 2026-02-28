@@ -1,48 +1,22 @@
+import { execSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { describe, expect, test } from "bun:test";
-
-function getBunTarget(): string | null {
-  const archMap: Record<string, string> = {
-    arm64: "arm64",
-    x64: "x64",
-  };
-
-  const arch = archMap[process.arch];
-  if (!arch) {
-    return null;
-  }
-
-  return `bun-${process.platform}-${arch}`;
-}
+import { join } from "node:path";
+import { describe, expect, test } from "vitest";
 
 describe("compiled binary", () => {
-  test("status command works in Bun binary", () => {
-    const target = getBunTarget();
-    if (!target) {
-      return;
-    }
-
+  test("status command works in SEA binary", () => {
     const root = process.cwd();
-    const tmpRoot = mkdtempSync(join(tmpdir(), "sesame-bun-test-"));
-    const outFile = join(tmpRoot, "sesame-test-binary");
+    const tmpRoot = mkdtempSync(join(tmpdir(), "sesame-sea-test-"));
 
     try {
-      const build = Bun.spawnSync([
-        "bun",
-        "build",
-        "--compile",
-        `--target=${target}`,
-        `--outfile=${outFile}`,
-        "src/sesame.ts",
-      ], {
+      // Build the SEA binary into a temp directory.
+      execSync(`npx tsdown --outDir ${tmpRoot}`, {
         cwd: root,
-        stdout: "pipe",
-        stderr: "pipe",
+        stdio: "pipe",
       });
 
-      expect(build.exitCode).toBe(0);
+      const outFile = join(tmpRoot, "sesame");
 
       const xdgDataHome = join(tmpRoot, "xdg-data");
       const xdgConfigHome = join(tmpRoot, "xdg-config");
@@ -59,16 +33,12 @@ describe("compiled binary", () => {
         XDG_CACHE_HOME: xdgCacheHome,
       };
 
-      const run = Bun.spawnSync([outFile, "status"], {
+      const stdout = execSync(`${outFile} status`, {
         cwd: root,
         env,
-        stdout: "pipe",
-        stderr: "pipe",
+        encoding: "utf-8",
       });
 
-      expect(run.exitCode).toBe(0);
-
-      const stdout = run.stdout.toString();
       expect(stdout).toContain("Sesame Index Status");
       expect(stdout).toContain("Sessions: 0");
       expect(stdout).toContain("Chunks:");

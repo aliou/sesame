@@ -57,10 +57,7 @@ Note: CLI currently does not expose every storage option (example: `status`).
 
 ## Runtime notes
 
-`openDatabase()` chooses backend by runtime:
-
-- Bun: `bun:sqlite`
-- Node: `node:sqlite`
+`openDatabase()` uses `node:sqlite`.
 
 No external SQLite package needed.
 

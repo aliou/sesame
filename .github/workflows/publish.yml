@@ -16,6 +16,9 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.changesets.outputs.published }}
+      version: ${{ steps.version.outputs.version }}
     permissions:
       contents: write
       packages: write
@@ -35,7 +38,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "25"
           registry-url: "https://registry.npmjs.org"
           scope: "@aliou"
           cache: "pnpm"
@@ -95,25 +98,71 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Setup Bun
-        if: steps.changesets.outputs.published == 'true'
-        uses: oven-sh/setup-bun@v2
-
-      - name: Build binaries
-        if: steps.changesets.outputs.published == 'true'
-        run: bun run build:binary
-
-      - name: Create GitHub Release
+      - name: Create GitHub Release (tag only)
         if: steps.changesets.outputs.published == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: v${{ steps.version.outputs.version }}
         run: |
-          if gh release view "$TAG" &>/dev/null; then
-            gh release upload "$TAG" dist/sesame-* --clobber
-          else
+          if ! gh release view "$TAG" &>/dev/null; then
             gh release create "$TAG" \
               --title "$TAG" \
-              --generate-notes \
-              dist/sesame-*
+              --generate-notes
           fi
+
+  build-binary:
+    name: Build ${{ matrix.artifact }}
+    needs: publish
+    if: needs.publish.outputs.published == 'true'
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x64
+            artifact: sesame-linux-x64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            artifact: sesame-linux-arm64
+          - os: macos-latest
+            arch: arm64
+            artifact: sesame-darwin-arm64
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 25
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build SEA binary
+        run: npx tsdown
+
+      - name: Verify binary was produced
+        run: |
+          if [ ! -f dist/sesame ]; then
+            echo "ERROR: SEA binary was not produced. tsdown may have silently failed."
+            echo "Contents of dist/:"
+            ls -la dist/
+            exit 1
+          fi
+
+      - name: Rename binary
+        run: mv dist/sesame dist/${{ matrix.artifact }}
+
+      - name: Upload to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ needs.publish.outputs.version }}
+        run: gh release upload "$TAG" dist/${{ matrix.artifact }} --clobber

@@ -147,31 +147,12 @@ CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_entry ON chunks(entry_id);
 `;
 
-const IS_BUN_RUNTIME =
-  typeof process !== "undefined" && Boolean(process.versions?.bun);
-
-const bunSqlite = IS_BUN_RUNTIME
-  ? (require("bun:sqlite") as {
-      Database: new (path: string) => Database;
-    })
-  : null;
-
-const nodeSqlite = !IS_BUN_RUNTIME
-  ? (require("node:sqlite") as {
-      DatabaseSync: new (path: string) => Database;
-    })
-  : null;
+const nodeSqlite = require("node:sqlite") as {
+  DatabaseSync: new (path: string) => Database;
+};
 
 function getDatabaseConstructor(): new (path: string) => Database {
-  if (IS_BUN_RUNTIME && bunSqlite) {
-    return bunSqlite.Database;
-  }
-
-  if (nodeSqlite) {
-    return nodeSqlite.DatabaseSync;
-  }
-
-  throw new Error("No SQLite implementation available for current runtime");
+  return nodeSqlite.DatabaseSync;
 }
 
 export function openDatabase(dbPath: string): Database {
