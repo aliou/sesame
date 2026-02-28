@@ -143,8 +143,6 @@ END;
 CREATE INDEX IF NOT EXISTS idx_chunks_session ON chunks(session_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_kind ON chunks(kind);
 CREATE INDEX IF NOT EXISTS idx_chunks_tool ON chunks(tool_name);
-CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id);
-CREATE INDEX IF NOT EXISTS idx_chunks_entry ON chunks(entry_id);
 `;
 
 const nodeSqlite = require("node:sqlite") as {
@@ -182,6 +180,9 @@ export function openDatabase(dbPath: string): Database {
   // Run pending migrations.
   runMigrations(db, isFresh);
 
+  // Create indexes that depend on columns introduced by migrations.
+  ensurePostMigrationIndexes(db);
+
   return db;
 }
 
@@ -218,6 +219,13 @@ function runMigrations(db: Database, isFresh: boolean): void {
 
     insertStmt.run(migration.id, migration.description);
   }
+}
+
+function ensurePostMigrationIndexes(db: Database): void {
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id)",
+  );
+  db.exec("CREATE INDEX IF NOT EXISTS idx_chunks_entry ON chunks(entry_id)");
 }
 
 export function getSessionMtime(
@@ -645,4 +653,5 @@ export function dropAll(db: Database): void {
   // Recreate schema and mark all migrations as applied
   db.exec(SCHEMA);
   runMigrations(db, true);
+  ensurePostMigrationIndexes(db);
 }

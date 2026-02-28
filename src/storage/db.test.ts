@@ -1,4 +1,5 @@
 import { unlinkSync } from "node:fs";
+import { createRequire } from "node:module";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
   deleteSession,
@@ -13,17 +14,34 @@ import {
   setMetadata,
 } from "./db.ts";
 
+const require = createRequire(import.meta.url);
+
+const nodeSqlite = require("node:sqlite") as {
+  DatabaseSync: new (
+    path: string,
+  ) => {
+    exec: (sql: string) => void;
+    close: () => void;
+  };
+};
+
 describe("Database operations", () => {
   let dbPath: string;
   let db: any;
 
   beforeEach(() => {
     dbPath = `/tmp/sesame-test-db-${Date.now()}-${Math.random()}.sqlite`;
+    db = undefined;
   });
 
   afterEach(() => {
     if (db) {
-      db.close();
+      try {
+        db.close();
+      } catch {
+        // Ignore if already closed
+      }
+      db = undefined;
     }
     try {
       unlinkSync(dbPath);
@@ -54,6 +72,65 @@ describe("Database operations", () => {
     expect(tableNames).toContain("chunks");
     expect(tableNames).toContain("chunks_fts");
     expect(tableNames).toContain("metadata");
+  });
+
+  test("openDatabase migrates legacy DB before creating tree indexes", () => {
+    const LegacyDatabaseConstructor = nodeSqlite.DatabaseSync;
+    const legacyDb = new LegacyDatabaseConstructor(dbPath);
+
+    legacyDb.exec(`
+      CREATE TABLE sessions (
+        id TEXT PRIMARY KEY,
+        source TEXT NOT NULL,
+        path TEXT NOT NULL,
+        cwd TEXT,
+        name TEXT,
+        created_at TEXT,
+        modified_at TEXT,
+        message_count INTEGER,
+        file_mtime INTEGER
+      );
+    `);
+
+    legacyDb.exec(`
+      CREATE TABLE chunks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        role TEXT,
+        tool_name TEXT,
+        seq INTEGER,
+        content TEXT NOT NULL
+      );
+    `);
+
+    legacyDb.close();
+
+    db = openDatabase(dbPath);
+
+    const sessionColumns = db
+      .prepare("PRAGMA table_info(sessions)")
+      .all() as Array<{
+      name: string;
+    }>;
+    const chunkColumns = db
+      .prepare("PRAGMA table_info(chunks)")
+      .all() as Array<{
+      name: string;
+    }>;
+
+    expect(sessionColumns.map((column) => column.name)).toContain(
+      "parent_session_id",
+    );
+    expect(chunkColumns.map((column) => column.name)).toContain("entry_id");
+
+    const indexes = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='index'")
+      .all() as Array<{ name: string }>;
+
+    const indexNames = indexes.map((index) => index.name);
+    expect(indexNames).toContain("idx_sessions_parent");
+    expect(indexNames).toContain("idx_chunks_entry");
   });
 
   test("insertSession + search finds it", () => {
