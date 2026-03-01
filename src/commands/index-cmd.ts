@@ -8,6 +8,7 @@ import { indexSessions } from "../indexer/index";
 import { PiParser } from "../parsers/pi";
 import { dropAll, openDatabase, setMetadata } from "../storage/db";
 import { expandPath, loadConfig } from "../utils/config";
+import { acquireIndexLock } from "../utils/index-lock";
 import { getXDGPaths } from "../utils/xdg";
 
 export default async function indexCommand(args: string[]): Promise<void> {
@@ -20,6 +21,8 @@ export default async function indexCommand(args: string[]): Promise<void> {
   // Get data directory and ensure it exists
   const paths = getXDGPaths();
   mkdirSync(paths.data, { recursive: true });
+
+  const lock = acquireIndexLock(paths.data, "index");
 
   // Open database
   const dbPath = join(paths.data, "index.sqlite");
@@ -91,5 +94,6 @@ export default async function indexCommand(args: string[]): Promise<void> {
     }
   } finally {
     db.close();
+    lock.release();
   }
 }

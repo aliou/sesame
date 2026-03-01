@@ -8,10 +8,13 @@ import { indexSessions } from "../indexer/index";
 import { PiParser } from "../parsers/pi";
 import { type Database, openDatabase, setMetadata } from "../storage/db";
 import { expandPath, loadConfig } from "../utils/config";
+import { acquireIndexLock, type IndexLockHandle } from "../utils/index-lock";
 import { getXDGPaths } from "../utils/xdg";
+import { createReindexQueue, type SourceConfig } from "./watch-queue";
 
 interface WatchState {
   db: Database;
+  indexLock: IndexLockHandle;
   watchers: FSWatcher[];
   debounceTimers: Map<string, NodeJS.Timeout>;
   intervalId?: NodeJS.Timeout;
@@ -38,16 +41,25 @@ export default async function watchCommand(args: string[]): Promise<void> {
   const paths = getXDGPaths();
   mkdirSync(paths.data, { recursive: true });
 
+  const indexLock = acquireIndexLock(paths.data, "watch");
+
   // Open database
   const dbPath = join(paths.data, "index.sqlite");
   const db = openDatabase(dbPath);
 
   const state: WatchState = {
     db,
+    indexLock,
     watchers: [],
     debounceTimers: new Map(),
     isShuttingDown: false,
   };
+
+  const reindexQueue = createReindexQueue(
+    (sources) => runIndexing(state, sources),
+    () => state.isShuttingDown,
+    console.error,
+  );
 
   // Set up graceful shutdown
   const shutdown = () => {
@@ -75,8 +87,9 @@ export default async function watchCommand(args: string[]): Promise<void> {
       clearInterval(state.intervalId);
     }
 
-    // Close database
+    // Close database and release process lock
     state.db.close();
+    state.indexLock.release();
 
     console.error("[%s] Shutdown complete", new Date().toISOString());
     process.exit(0);
@@ -100,13 +113,9 @@ export default async function watchCommand(args: string[]): Promise<void> {
         pollInterval / 1000,
       );
 
-      state.intervalId = setInterval(async () => {
+      state.intervalId = setInterval(() => {
         if (!state.isShuttingDown) {
-          console.error(
-            "[%s] Running scheduled index...",
-            new Date().toISOString(),
-          );
-          await runIndexing(state, config.sources);
+          reindexQueue.enqueue(config.sources, "scheduled");
         }
       }, pollInterval);
     } else {
@@ -152,15 +161,10 @@ export default async function watchCommand(args: string[]): Promise<void> {
                 clearTimeout(existingTimer);
               }
 
-              const timer = setTimeout(async () => {
+              const timer = setTimeout(() => {
                 state.debounceTimers.delete(expandedPath);
                 if (!state.isShuttingDown) {
-                  console.error(
-                    "[%s] Re-indexing %s...",
-                    new Date().toISOString(),
-                    expandedPath,
-                  );
-                  await runIndexing(state, [source]);
+                  reindexQueue.enqueue([source], `fs:${eventType}`);
                 }
               }, 500);
 
@@ -214,7 +218,7 @@ export default async function watchCommand(args: string[]): Promise<void> {
 
 async function runIndexing(
   state: WatchState,
-  sources: Array<{ path: string; parser: string }>,
+  sources: SourceConfig[],
 ): Promise<void> {
   const timestamp = new Date().toISOString();
   let totalAdded = 0;
