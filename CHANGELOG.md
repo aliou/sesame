@@ -1,5 +1,11 @@
 # @aliou/sesame
 
+## 0.7.1
+
+### Patch Changes
+
+- e99835f: Prevent sqlite lock contention during indexing by adding a cross-process index lock and serializing watch-triggered reindex runs. Also add tests for lock behavior and watch queue serialization.
+
 ## 0.7.0
 
 ### Minor Changes
