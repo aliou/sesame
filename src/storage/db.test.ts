@@ -1014,11 +1014,15 @@ describe("Database operations", () => {
     expect(results[0].sessionId).toBe("fallback-match");
   });
 
-  test("search with empty query throws error", () => {
+  test("search with empty query lists all sessions with filters", () => {
     db = openDatabase(dbPath);
 
-    expect(() => search(db, "")).toThrow("Search query cannot be empty");
-    expect(() => search(db, "   ")).toThrow("Search query cannot be empty");
+    // Empty query normalizes to "*" and lists sessions with filters
+    expect(() => search(db, "", { limit: 1 })).not.toThrow();
+    expect(() => search(db, "   ", { limit: 1 })).not.toThrow();
+
+    // Whitespace-only query also normalizes to "*"
+    expect(() => search(db, " ")).not.toThrow();
   });
 
   test("search with '*' filters by toolName", () => {

@@ -435,9 +435,9 @@ export function search(
     status,
   } = options;
 
-  // Handle empty query
+  // Normalize empty query to "*" for listing all sessions with filters
   if (!query || query.trim() === "") {
-    throw new Error("Search query cannot be empty");
+    query = "*";
   }
 
   // Special case: "*" means list all sessions with filters

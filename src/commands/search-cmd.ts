@@ -66,8 +66,8 @@ export default async function searchCommand(args: string[]): Promise<void> {
     }
   }
 
-  // Validate query
-  if (!query) {
+  // Validate query - empty string is allowed (will be normalized to "*" in search)
+  if (query === undefined) {
     printUsage();
     process.exit(1);
   }
