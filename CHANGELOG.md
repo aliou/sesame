@@ -1,5 +1,11 @@
 # @aliou/sesame
 
+## 0.8.0
+
+### Minor Changes
+
+- 9ef404e: allow searching "" to list sessions
+
 ## 0.7.1
 
 ### Patch Changes
