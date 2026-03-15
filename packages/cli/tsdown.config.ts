@@ -1,7 +1,7 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["packages/cli/sesame.ts"],
+  entry: ["sesame.ts"],
   format: "cjs",
   exe: {
     fileName: "sesame",

@@ -31,7 +31,7 @@ flowchart TD
 
 ## Incremental strategy
 
-`src/indexer/index.ts` uses file mtime:
+`packages/sesame/indexer/index.ts` uses file mtime:
 
 - reads file first line for session id
 - compares current mtime vs stored `sessions.file_mtime`
@@ -42,7 +42,7 @@ This keeps index fast for large session directories.
 
 ## Parsing (`PiParser`)
 
-`src/parsers/pi.ts` extracts:
+`packages/sesame/parsers/pi.ts` extracts:
 
 - session header (`id`, `cwd`, `timestamp`)
 - optional session name (`session_info`)
@@ -72,7 +72,7 @@ One chunk per assistant tool call:
 
 - `kind = "tool_call"`
 - `tool_name = tool call name`
-- `content` formatted by `src/indexer/format-tool-call.ts`
+- `content` formatted by `packages/sesame/indexer/format-tool-call.ts`
 
 Formatter includes tool-specific fields (path/content/command/result/etc.) to make file and command searches work.
 

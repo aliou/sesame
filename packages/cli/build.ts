@@ -9,5 +9,5 @@
 import { execSync } from "node:child_process";
 
 console.log("Building binary for current platform...");
-execSync("npx tsdown --config ../../tsdown.config.ts", { stdio: "inherit" });
+execSync("npx tsdown", { stdio: "inherit" });
 console.log("Done.");

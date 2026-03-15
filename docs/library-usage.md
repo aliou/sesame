@@ -1,6 +1,6 @@
 # Library usage
 
-Sesame exports parser, indexer, storage, config, and date helpers from `src/index.ts`.
+Sesame exports parser, indexer, storage, config, and date helpers from `packages/sesame/index.ts`.
 
 ## Install (as dependency)
 

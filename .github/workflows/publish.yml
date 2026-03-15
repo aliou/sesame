@@ -27,7 +27,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
@@ -36,7 +36,7 @@ jobs:
         uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "25"
           registry-url: "https://registry.npmjs.org"
@@ -131,12 +131,12 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 25
 
@@ -147,22 +147,22 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build SEA binary
-        run: npx tsdown
+        run: pnpm --filter @aliou/sesame-cli run build:binary
 
       - name: Verify binary was produced
         run: |
-          if [ ! -f dist/sesame ]; then
+          if [ ! -f packages/cli/dist/sesame ]; then
             echo "ERROR: SEA binary was not produced. tsdown may have silently failed."
-            echo "Contents of dist/:"
-            ls -la dist/
+            echo "Contents of packages/cli/dist/:"
+            ls -la packages/cli/dist/
             exit 1
           fi
 
       - name: Rename binary
-        run: mv dist/sesame dist/${{ matrix.artifact }}
+        run: mv packages/cli/dist/sesame packages/cli/dist/${{ matrix.artifact }}
 
       - name: Upload to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: v${{ needs.publish.outputs.version }}
-        run: gh release upload "$TAG" dist/${{ matrix.artifact }} --clobber
+        run: gh release upload "$TAG" packages/cli/dist/${{ matrix.artifact }} --clobber

@@ -1,7 +1,7 @@
 import {
-  Type,
   type ExtensionAPI,
   type ToolDefinition,
+  Type,
 } from "@mariozechner/pi-coding-agent";
 
 interface SearchResult {
@@ -21,9 +21,7 @@ interface SearchResponse {
   results: SearchResult[];
 }
 
-export function createSesameSearchTool(
-  pi: ExtensionAPI,
-): ToolDefinition {
+export function createSesameSearchTool(pi: ExtensionAPI): ToolDefinition {
   return {
     name: "sesame_search",
     description:
@@ -37,14 +35,12 @@ export function createSesameSearchTool(
       ),
       after: Type.Optional(
         Type.String({
-          description:
-            "Filter sessions after date (7d, 2w, 1m, or ISO date)",
+          description: "Filter sessions after date (7d, 2w, 1m, or ISO date)",
         }),
       ),
       before: Type.Optional(
         Type.String({
-          description:
-            "Filter sessions before date (7d, 2w, 1m, or ISO date)",
+          description: "Filter sessions before date (7d, 2w, 1m, or ISO date)",
         }),
       ),
       limit: Type.Optional(
@@ -106,8 +102,7 @@ export function createSesameSearchTool(
       text += theme.fg("muted", `"${params.query}"`);
       if (params.cwd) text += theme.fg("dim", ` --cwd ${params.cwd}`);
       if (params.after) text += theme.fg("dim", ` --after ${params.after}`);
-      if (params.before)
-        text += theme.fg("dim", ` --before ${params.before}`);
+      if (params.before) text += theme.fg("dim", ` --before ${params.before}`);
       if (params.limit) text += theme.fg("dim", ` --limit ${params.limit}`);
       return text;
     },
@@ -121,7 +116,10 @@ export function createSesameSearchTool(
       if (!data) return undefined;
 
       if (data.resultCount === 0) {
-        return theme.fg("warning", `No sessions found matching "${data.query}"`);
+        return theme.fg(
+          "warning",
+          `No sessions found matching "${data.query}"`,
+        );
       }
 
       const lines = [

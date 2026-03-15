@@ -20,9 +20,6 @@ importers:
       husky:
         specifier: ^9.1.7
         version: 9.1.7
-      tsdown:
-        specifier: 0.21.0-beta.2
-        version: 0.21.0-beta.2(typescript@5.9.3)
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
@@ -36,15 +33,23 @@ importers:
       '@types/node':
         specifier: ^22.15.30
         version: 22.19.10
+      tsdown:
+        specifier: 0.21.0-beta.2
+        version: 0.21.0-beta.2(typescript@5.9.3)
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@22.19.10)(yaml@2.8.2)
 
-  packages/sesame:
-    dependencies:
+  packages/pi:
+    devDependencies:
       '@mariozechner/pi-coding-agent':
         specifier: '*'
         version: 0.52.9(ws@8.19.0)(zod@3.25.76)
+      '@types/node':
+        specifier: ^22.15.30
+        version: 22.19.10
+
+  packages/sesame:
     devDependencies:
       '@types/node':
         specifier: ^22.15.30
@@ -52,6 +57,8 @@ importers:
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@22.19.10)(yaml@2.8.2)
+
+  packages/skills/sesame-cli: {}
 
 packages:
 

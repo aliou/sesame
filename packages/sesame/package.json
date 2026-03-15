@@ -34,9 +34,6 @@
   "publishConfig": {
     "access": "public"
   },
-  "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*"
-  },
   "devDependencies": {
     "@types/node": "^22.15.30",
     "vitest": "^4.0.18"
