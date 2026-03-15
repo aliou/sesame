@@ -95,7 +95,7 @@ jobs:
         if: steps.changesets.outputs.published == 'true'
         id: version
         run: |
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION=$(node -p "require('./packages/sesame/package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release (tag only)

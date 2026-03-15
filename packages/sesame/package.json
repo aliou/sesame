@@ -1,0 +1,47 @@
+{
+  "name": "@aliou/sesame",
+  "version": "0.8.0",
+  "description": "Semantic search for coding agent sessions",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest run",
+    "prepublishOnly": "pnpm run build"
+  },
+  "keywords": [
+    "semantic-search",
+    "coding-agent",
+    "pi",
+    "sqlite"
+  ],
+  "author": "Aliou Diallo",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aliou/sesame",
+    "directory": "packages/sesame"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=25.0.0"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "name": "@aliou/sesame-cli",
+  "version": "0.8.0",
+  "private": true,
+  "description": "CLI for Sesame semantic search",
+  "type": "module",
+  "bin": {
+    "sesame": "./bin/sesame"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "build:binary": "node --disable-warning=ExperimentalWarning build.ts",
+    "dev": "./bin/sesame",
+    "test": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest run",
+    "test:cli": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest run --config vitest.cli.config.ts"
+  },
+  "author": "Aliou Diallo",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aliou/sesame",
+    "directory": "packages/cli"
+  },
+  "dependencies": {
+    "@aliou/sesame": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=25.0.0"
+  }
+}

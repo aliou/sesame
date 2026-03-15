@@ -16,4 +16,4 @@ else
   exit 1
 fi
 
-exec "$NODE" --disable-warning=ExperimentalWarning --experimental-strip-types "$SESAME_ROOT/src/sesame.ts" "$@"
+exec "$NODE" --disable-warning=ExperimentalWarning --experimental-strip-types "$SESAME_ROOT/sesame.ts" "$@"

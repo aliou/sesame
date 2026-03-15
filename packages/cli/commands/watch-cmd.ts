@@ -4,12 +4,18 @@
 
 import { type FSWatcher, mkdirSync, watch } from "node:fs";
 import { join } from "node:path";
-import { indexSessions } from "../indexer/index";
-import { PiParser } from "../parsers/pi";
-import { type Database, openDatabase, setMetadata } from "../storage/db";
-import { expandPath, loadConfig } from "../utils/config";
-import { acquireIndexLock, type IndexLockHandle } from "../utils/index-lock";
-import { getXDGPaths } from "../utils/xdg";
+import {
+  acquireIndexLock,
+  type Database,
+  expandPath,
+  getXDGPaths,
+  type IndexLockHandle,
+  indexSessions,
+  loadConfig,
+  openDatabase,
+  PiParser,
+  setMetadata,
+} from "@aliou/sesame";
 import { createReindexQueue, type SourceConfig } from "./watch-queue";
 
 interface WatchState {

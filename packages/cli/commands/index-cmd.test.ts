@@ -9,27 +9,16 @@ const mockLoadConfig = vi.fn();
 const mockGetXDGPaths = vi.fn();
 const mockAcquireIndexLock = vi.fn();
 
-vi.mock("../indexer/index", () => ({
-  indexSessions: (...args: unknown[]) => mockIndexSessions(...args),
-}));
-
-vi.mock("../storage/db", () => ({
+vi.mock("@aliou/sesame", () => ({
+  PiParser: class {},
+  acquireIndexLock: (...args: unknown[]) => mockAcquireIndexLock(...args),
   dropAll: (...args: unknown[]) => mockDropAll(...args),
+  expandPath: (path: string) => path,
+  getXDGPaths: (...args: unknown[]) => mockGetXDGPaths(...args),
+  indexSessions: (...args: unknown[]) => mockIndexSessions(...args),
+  loadConfig: (...args: unknown[]) => mockLoadConfig(...args),
   openDatabase: (...args: unknown[]) => mockOpenDatabase(...args),
   setMetadata: (...args: unknown[]) => mockSetMetadata(...args),
-}));
-
-vi.mock("../utils/config", () => ({
-  expandPath: (path: string) => path,
-  loadConfig: (...args: unknown[]) => mockLoadConfig(...args),
-}));
-
-vi.mock("../utils/xdg", () => ({
-  getXDGPaths: (...args: unknown[]) => mockGetXDGPaths(...args),
-}));
-
-vi.mock("../utils/index-lock", () => ({
-  acquireIndexLock: (...args: unknown[]) => mockAcquireIndexLock(...args),
 }));
 
 describe("index command lock behavior", () => {

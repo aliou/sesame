@@ -11,7 +11,7 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["src/**/*.ts", "bin/**"]
+    "includes": ["packages/**/*.ts", "packages/cli/bin/**"]
   },
   "formatter": {
     "enabled": true,

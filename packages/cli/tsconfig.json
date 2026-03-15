@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "lib": ["ES2022"],
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@aliou/sesame": ["../sesame/index.ts"]
+    },
+    "outDir": "./dist",
+    "rootDir": ".",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "noEmit": false
+  },
+  "include": ["sesame.ts", "commands/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"],
+  "references": [{ "path": "../sesame" }]
+}

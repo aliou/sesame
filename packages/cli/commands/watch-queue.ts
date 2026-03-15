@@ -1,4 +1,4 @@
-import { expandPath } from "../utils/config";
+import { expandPath } from "@aliou/sesame";
 
 export type SourceConfig = {
   path: string;

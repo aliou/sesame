@@ -1,24 +1,19 @@
+import * as sesameModule from "@aliou/sesame";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import * as dbModule from "../storage/db";
 import searchCommand from "./search-cmd";
 
-vi.mock("../storage/db", () => ({
-  openDatabase: vi.fn(() => ({
-    close: vi.fn(),
-  })),
-  search: vi.fn(() => []),
-}));
-
-vi.mock("../utils/config", () => ({
-  loadConfig: vi.fn(async () => {}),
-}));
-
-vi.mock("../utils/xdg", () => ({
+vi.mock("@aliou/sesame", () => ({
   getXDGPaths: vi.fn(() => ({
     data: "/tmp/sesame-test-data",
     config: "/tmp/sesame-test-config",
     cache: "/tmp/sesame-test-cache",
   })),
+  loadConfig: vi.fn(async () => {}),
+  openDatabase: vi.fn(() => ({
+    close: vi.fn(),
+  })),
+  parseRelativeDate: vi.fn((value: string) => value),
+  search: vi.fn(() => []),
 }));
 
 describe("search command", () => {
@@ -43,7 +38,7 @@ describe("search command", () => {
       "--json",
     ]);
 
-    expect(dbModule.search).toHaveBeenCalledWith(
+    expect(sesameModule.search).toHaveBeenCalledWith(
       expect.anything(),
       "query",
       expect.objectContaining({
