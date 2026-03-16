@@ -31,15 +31,13 @@ export function getXDGPaths(): XDGPaths {
   const isLinux = process.platform === "linux";
 
   // Data directory: ~/.local/share/sesame
-  const defaultData =
-    isMacOS || isLinux ? join(home, ".local", "share") : join(home, ".sesame");
+  const defaultData = isMacOS || isLinux ? join(home, ".local", "share") : join(home, ".sesame");
   const dataHome = process.env.SESAME_DATA_DIR
     ? expandHome(process.env.SESAME_DATA_DIR)
     : join(process.env.XDG_DATA_HOME || defaultData, "sesame");
 
   // Config directory: ~/.config/sesame
-  const defaultConfig =
-    isMacOS || isLinux ? join(home, ".config") : join(home, ".sesame");
+  const defaultConfig = isMacOS || isLinux ? join(home, ".config") : join(home, ".sesame");
   const configHome = process.env.SESAME_CONFIG_DIR
     ? expandHome(process.env.SESAME_CONFIG_DIR)
     : join(process.env.XDG_CONFIG_HOME || defaultConfig, "sesame");
@@ -55,9 +53,7 @@ export function getXDGPaths(): XDGPaths {
     : join(process.env.XDG_CACHE_HOME || defaultCache, "sesame");
 
   // Runtime directory: /run/user/$UID (Linux) or /tmp (macOS)
-  const defaultRuntime = isLinux
-    ? `/run/user/${process.getuid?.() ?? 1000}`
-    : "/tmp";
+  const defaultRuntime = isLinux ? `/run/user/${process.getuid?.() ?? 1000}` : "/tmp";
   const runtimeDir = process.env.SESAME_RUNTIME_DIR
     ? expandHome(process.env.SESAME_RUNTIME_DIR)
     : join(process.env.XDG_RUNTIME_DIR || defaultRuntime, "sesame");

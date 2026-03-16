@@ -32,30 +32,25 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: "25"
-          registry-url: "https://registry.npmjs.org"
-          scope: "@aliou"
-          cache: "pnpm"
+          node-version: 25
+          cache: true
 
       - name: Upgrade npm for OIDC support
         run: npm install -g npm@latest
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: vp install
 
       - name: Build
-        run: pnpm run build
+        run: vp run build
 
       - name: Get release info
         id: release-info
         run: |
-          pnpm changeset status --output=release.json 2>/dev/null || echo '{"releases":[]}' > release.json
+          vp exec changeset status --output=release.json 2>/dev/null || echo '{"releases":[]}' > release.json
           node <<NODE
           const fs = require('fs');
           const release = JSON.parse(fs.readFileSync('release.json', 'utf8'));
@@ -83,8 +78,8 @@ jobs:
         id: changesets
         uses: changesets/action@v1
         with:
-          version: pnpm changeset version
-          publish: pnpm changeset publish
+          version: vp exec changeset version
+          publish: vp exec changeset publish
           title: ${{ steps.release-info.outputs.title || 'Version Packages' }}
           commit: ${{ steps.release-info.outputs.commit || 'Version Packages' }}
         env:
@@ -135,34 +130,32 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Setup Node
-        uses: actions/setup-node@v6
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
           node-version: 25
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+          cache: true
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: vp install
 
       - name: Build SEA binary
-        run: pnpm --filter @aliou/sesame-cli run build:binary
+        run: vp run build:binary
 
       - name: Verify binary was produced
         run: |
-          if [ ! -f packages/cli/dist/sesame ]; then
-            echo "ERROR: SEA binary was not produced. tsdown may have silently failed."
-            echo "Contents of packages/cli/dist/:"
-            ls -la packages/cli/dist/
+          if [ ! -f packages/cli/build/sesame ]; then
+            echo "ERROR: SEA binary was not produced. pack may have silently failed."
+            echo "Contents of packages/cli/build/:"
+            ls -la packages/cli/build/
             exit 1
           fi
 
       - name: Rename binary
-        run: mv packages/cli/dist/sesame packages/cli/dist/${{ matrix.artifact }}
+        run: mv packages/cli/build/sesame packages/cli/build/${{ matrix.artifact }}
 
       - name: Upload to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: v${{ needs.publish.outputs.version }}
-        run: gh release upload "$TAG" packages/cli/dist/${{ matrix.artifact }} --clobber
+        run: gh release upload "$TAG" packages/cli/build/${{ matrix.artifact }} --clobber

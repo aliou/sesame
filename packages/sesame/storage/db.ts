@@ -166,9 +166,7 @@ export function openDatabase(dbPath: string): Database {
   // Detect whether the database already has tables (existing DB vs fresh).
   // Must happen before SCHEMA so we know whether to run or skip migrations.
   const existing = db
-    .prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'",
-    )
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'")
     .get() as { name: string } | undefined;
   const isFresh = !existing;
 
@@ -202,9 +200,7 @@ function runMigrations(db: Database, isFresh: boolean): void {
   }>;
   const applied = new Set(rows.map((r) => r.id));
 
-  const insertStmt = db.prepare(
-    "INSERT INTO schema_migrations (id, description) VALUES (?, ?)",
-  );
+  const insertStmt = db.prepare("INSERT INTO schema_migrations (id, description) VALUES (?, ?)");
 
   for (const migration of migrations) {
     if (applied.has(migration.id)) {
@@ -222,16 +218,11 @@ function runMigrations(db: Database, isFresh: boolean): void {
 }
 
 function ensurePostMigrationIndexes(db: Database): void {
-  db.exec(
-    "CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id)",
-  );
+  db.exec("CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_chunks_entry ON chunks(entry_id)");
 }
 
-export function getSessionMtime(
-  db: Database,
-  sessionId: string,
-): number | null {
+export function getSessionMtime(db: Database, sessionId: string): number | null {
   const stmt = db.prepare("SELECT file_mtime FROM sessions WHERE id = ?");
   const row = stmt.get(sessionId) as { file_mtime: number } | undefined;
   return row?.file_mtime ?? null;
@@ -242,11 +233,7 @@ export function deleteSession(db: Database, sessionId: string): void {
   stmt.run(sessionId);
 }
 
-export function insertSession(
-  db: Database,
-  session: StoredSession,
-  chunks: StoredChunk[],
-): void {
+export function insertSession(db: Database, session: StoredSession, chunks: StoredChunk[]): void {
   const insertSessionStmt = db.prepare(
     `INSERT INTO sessions (id, source, path, cwd, name, created_at, modified_at, message_count, file_mtime, parent_session_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -300,19 +287,9 @@ export function insertSession(
  * Used when query is "*" to bypass full-text search.
  */
 function listAllSessions(db: Database, options: SearchOptions): SearchResult[] {
-  const {
-    cwd,
-    after,
-    before,
-    limit = 10,
-    toolsOnly = false,
-    toolName,
-    exclude,
-    status,
-  } = options;
+  const { cwd, after, before, limit = 10, toolsOnly = false, toolName, exclude, status } = options;
 
-  const needsChunkJoin =
-    toolsOnly || toolName || (status && (toolsOnly || toolName));
+  const needsChunkJoin = toolsOnly || toolName || (status && (toolsOnly || toolName));
 
   let sql: string;
   if (needsChunkJoin) {
@@ -418,11 +395,7 @@ function listAllSessions(db: Database, options: SearchOptions): SearchResult[] {
   }));
 }
 
-export function search(
-  db: Database,
-  query: string,
-  options: SearchOptions = {},
-): SearchResult[] {
+export function search(db: Database, query: string, options: SearchOptions = {}): SearchResult[] {
   const {
     cwd,
     after,
@@ -445,9 +418,7 @@ export function search(
     // Validate that we have at least one constraint (limit counts due to default)
     const hasFilters = cwd || after || before || limit;
     if (!hasFilters) {
-      throw new Error(
-        'Query "*" requires at least one filter (cwd, after, before, or limit)',
-      );
+      throw new Error('Query "*" requires at least one filter (cwd, after, before, or limit)');
     }
     return listAllSessions(db, options);
   }

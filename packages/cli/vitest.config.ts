@@ -1,16 +1,14 @@
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vitest/config";
+import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   resolve: {
     alias: {
-      "@aliou/sesame": fileURLToPath(
-        new URL("../sesame/index.ts", import.meta.url),
-      ),
+      "@aliou/sesame": fileURLToPath(new URL("../sesame/index.ts", import.meta.url)),
     },
   },
   test: {
     include: ["**/*.test.ts"],
-    exclude: ["test/**", "node_modules/**"],
+    exclude: ["test/**", "dist/**", "node_modules/**"],
   },
 });

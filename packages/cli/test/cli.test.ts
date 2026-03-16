@@ -2,17 +2,26 @@ import { execSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
+
+function supportsSeaBuild(): boolean {
+  const [major = "0", minor = "0"] = process.versions.node.split(".");
+  return Number(major) > 25 || (Number(major) === 25 && Number(minor) >= 7);
+}
 
 describe("compiled binary", () => {
   test("status command works in SEA binary", () => {
+    if (!supportsSeaBuild()) {
+      return;
+    }
+
     const root = process.cwd();
+    const cliDir = join(root, "packages/cli");
     const tmpRoot = mkdtempSync(join(tmpdir(), "sesame-sea-test-"));
 
     try {
-      // Build the SEA binary into a temp directory.
-      execSync(`npx tsdown --outDir ${tmpRoot}`, {
-        cwd: root,
+      execSync(`vp pack --outDir ${tmpRoot}`, {
+        cwd: cliDir,
         stdio: "pipe",
       });
 

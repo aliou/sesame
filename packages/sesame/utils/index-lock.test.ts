@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vite-plus/test";
 import { acquireIndexLock } from "./index-lock";
 
 describe("acquireIndexLock", () => {
@@ -53,9 +53,7 @@ describe("acquireIndexLock", () => {
       "utf8",
     );
 
-    expect(() => acquireIndexLock(dir, "index")).toThrow(
-      "Index already running",
-    );
+    expect(() => acquireIndexLock(dir, "index")).toThrow("Index already running");
   });
 
   test("removes stale lock when recorded pid is dead", () => {

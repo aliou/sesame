@@ -19,11 +19,7 @@ export function formatToolCall(tc: ToolCall): string {
     case "write_file":
     case "create_file": {
       const path = extractArg(tc, ["path", "file_path", "filePath"]);
-      const content = extractArg(tc, [
-        "content",
-        "file_content",
-        "fileContent",
-      ]);
+      const content = extractArg(tc, ["content", "file_content", "fileContent"]);
       return buildText([
         `tool: ${tc.name}`,
         path ? `path: ${path}` : null,
@@ -35,20 +31,8 @@ export function formatToolCall(tc: ToolCall): string {
     case "edit":
     case "edit_file": {
       const path = extractArg(tc, ["path", "file_path", "filePath"]);
-      const oldText = extractArg(tc, [
-        "old",
-        "oldText",
-        "old_text",
-        "old_string",
-        "search",
-      ]);
-      const newText = extractArg(tc, [
-        "new",
-        "newText",
-        "new_text",
-        "new_string",
-        "replace",
-      ]);
+      const oldText = extractArg(tc, ["old", "oldText", "old_text", "old_string", "search"]);
+      const newText = extractArg(tc, ["new", "newText", "new_text", "new_string", "replace"]);
       return buildText([
         `tool: ${tc.name}`,
         path ? `path: ${path}` : null,
@@ -83,9 +67,7 @@ export function formatToolCall(tc: ToolCall): string {
     default: {
       // Generic: dump all args + result
       const argsText = Object.entries(tc.args)
-        .map(
-          ([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`,
-        )
+        .map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`)
         .join("\n");
       return buildText([
         `tool: ${tc.name}`,

@@ -126,10 +126,7 @@ export default async function watchCommand(args: string[]): Promise<void> {
       }, pollInterval);
     } else {
       // File system watch mode
-      console.error(
-        "[%s] Starting file system monitoring...",
-        new Date().toISOString(),
-      );
+      console.error("[%s] Starting file system monitoring...", new Date().toISOString());
 
       for (const source of config.sources) {
         const expandedPath = expandPath(source.path);
@@ -145,38 +142,29 @@ export default async function watchCommand(args: string[]): Promise<void> {
         }
 
         try {
-          const watcher = watch(
-            expandedPath,
-            { recursive: true },
-            (eventType, filename) => {
-              if (state.isShuttingDown) {
-                return;
+          const watcher = watch(expandedPath, { recursive: true }, (eventType, filename) => {
+            if (state.isShuttingDown) {
+              return;
+            }
+
+            const timestamp = new Date().toISOString();
+            console.error("[%s] Detected %s: %s", timestamp, eventType, filename || "unknown");
+
+            // Debounce: clear existing timer and set new one
+            const existingTimer = state.debounceTimers.get(expandedPath);
+            if (existingTimer) {
+              clearTimeout(existingTimer);
+            }
+
+            const timer = setTimeout(() => {
+              state.debounceTimers.delete(expandedPath);
+              if (!state.isShuttingDown) {
+                reindexQueue.enqueue([source], `fs:${eventType}`);
               }
+            }, 500);
 
-              const timestamp = new Date().toISOString();
-              console.error(
-                "[%s] Detected %s: %s",
-                timestamp,
-                eventType,
-                filename || "unknown",
-              );
-
-              // Debounce: clear existing timer and set new one
-              const existingTimer = state.debounceTimers.get(expandedPath);
-              if (existingTimer) {
-                clearTimeout(existingTimer);
-              }
-
-              const timer = setTimeout(() => {
-                state.debounceTimers.delete(expandedPath);
-                if (!state.isShuttingDown) {
-                  reindexQueue.enqueue([source], `fs:${eventType}`);
-                }
-              }, 500);
-
-              state.debounceTimers.set(expandedPath, timer);
-            },
-          );
+            state.debounceTimers.set(expandedPath, timer);
+          });
 
           watcher.on("error", (error) => {
             console.error(
@@ -188,11 +176,7 @@ export default async function watchCommand(args: string[]): Promise<void> {
           });
 
           state.watchers.push(watcher);
-          console.error(
-            "[%s] Watching: %s",
-            new Date().toISOString(),
-            expandedPath,
-          );
+          console.error("[%s] Watching: %s", new Date().toISOString(), expandedPath);
         } catch (error) {
           console.error(
             "[%s] Failed to watch %s: %s",
@@ -204,10 +188,7 @@ export default async function watchCommand(args: string[]): Promise<void> {
       }
     }
 
-    console.error(
-      "[%s] Watch mode active. Press Ctrl+C to stop.",
-      new Date().toISOString(),
-    );
+    console.error("[%s] Watch mode active. Press Ctrl+C to stop.", new Date().toISOString());
 
     // Keep the process alive
     await new Promise(() => {});
@@ -222,10 +203,7 @@ export default async function watchCommand(args: string[]): Promise<void> {
   }
 }
 
-async function runIndexing(
-  state: WatchState,
-  sources: SourceConfig[],
-): Promise<void> {
+async function runIndexing(state: WatchState, sources: SourceConfig[]): Promise<void> {
   const timestamp = new Date().toISOString();
   let totalAdded = 0;
   let totalUpdated = 0;

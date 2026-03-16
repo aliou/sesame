@@ -50,6 +50,7 @@ Options:
 - `--json`: JSON output
 
 Date formats:
+
 - relative: `7d`, `2w`, `1m`
 - absolute: `YYYY-MM-DD`
 
@@ -86,10 +87,12 @@ Shows index stats:
 Runs one initial index pass, then keeps re-indexing on file changes (or interval) and emits JSON events.
 
 Modes:
+
 - default: filesystem watch + debounce
 - `--interval <seconds>`: polling mode
 
 Outputs:
+
 - stderr: human logs
 - stdout: JSON events (machine-readable)
 

@@ -1,6 +1,6 @@
 import { unlinkSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vite-plus/test";
 import { createSessionBuilder } from "../test-helpers/session-factory.ts";
 import { PiParser } from "./pi.ts";
 
@@ -75,10 +75,7 @@ describe("PiParser", () => {
     });
 
     test("extracts session name from session_info line", async () => {
-      const content = createSessionBuilder()
-        .withHeader()
-        .withName("My Test Session")
-        .build();
+      const content = createSessionBuilder().withHeader().withName("My Test Session").build();
       const path = await createTempFile(content);
 
       const session = await parser.parse(path);
@@ -200,17 +197,13 @@ describe("PiParser", () => {
 
       expect(session.turns).toHaveLength(1);
       expect(session.turns[0].role).toBe("system");
-      expect(session.turns[0].textContent).toBe(
-        "$ ls -la\ntotal 8\ndrwxr-xr-x  2 user user 4096",
-      );
+      expect(session.turns[0].textContent).toBe("$ ls -la\ntotal 8\ndrwxr-xr-x  2 user user 4096");
     });
 
     test("parses compaction summaries as system turns", async () => {
       const content = createSessionBuilder()
         .withHeader()
-        .withCompactionSummary(
-          "Previous conversation was about setting up tests",
-        )
+        .withCompactionSummary("Previous conversation was about setting up tests")
         .build();
       const path = await createTempFile(content);
 
@@ -218,9 +211,7 @@ describe("PiParser", () => {
 
       expect(session.turns).toHaveLength(1);
       expect(session.turns[0].role).toBe("system");
-      expect(session.turns[0].textContent).toBe(
-        "Previous conversation was about setting up tests",
-      );
+      expect(session.turns[0].textContent).toBe("Previous conversation was about setting up tests");
     });
 
     test("skips model_change, thinking_level_change, custom lines", async () => {
@@ -251,10 +242,7 @@ describe("PiParser", () => {
     });
 
     test("handles sessions without a name (name should be undefined)", async () => {
-      const content = createSessionBuilder()
-        .withHeader()
-        .withUserMessage("Test message")
-        .build();
+      const content = createSessionBuilder().withHeader().withUserMessage("Test message").build();
       const path = await createTempFile(content);
 
       const session = await parser.parse(path);

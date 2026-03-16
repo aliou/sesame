@@ -1,15 +1,13 @@
 {
   "private": true,
   "description": "Semantic search for coding agent sessions",
-  "type": "module",
-  "pi": {
-    "extensions": [
-      "./packages/pi/src/index.ts"
-    ],
-    "skills": [
-      "./packages/skills"
-    ]
+  "license": "MIT",
+  "author": "Aliou Diallo",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aliou/sesame"
   },
+  "type": "module",
   "scripts": {
     "build": "pnpm -r run build",
     "typecheck": "pnpm -r run typecheck",
@@ -17,28 +15,30 @@
     "dev": "./packages/cli/bin/sesame",
     "test": "pnpm -r run test",
     "test:cli": "pnpm --filter @aliou/sesame-cli run test:cli",
-    "lint": "biome check",
-    "format": "biome check --write",
-    "check:lockfile": "pnpm install --frozen-lockfile --ignore-scripts",
-    "prepare": "husky",
-    "version": "pnpm exec changeset version",
-    "prepublishOnly": "pnpm -r run build"
+    "lint": "vp check",
+    "format": "vp fmt",
+    "check:lockfile": "vp install --frozen-lockfile --ignore-scripts",
+    "prepare": "vp config",
+    "version": "vp exec changeset version",
+    "prepublishOnly": "vp run build"
   },
-  "author": "Aliou Diallo",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/aliou/sesame"
-  },
-  "packageManager": "pnpm@10.26.1",
   "devDependencies": {
     "@aliou/biome-plugins": "^0.3.1",
     "@biomejs/biome": "^2.3.14",
     "@changesets/cli": "^2.29.8",
-    "husky": "^9.1.7",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vite-plus": "catalog:"
   },
   "engines": {
     "node": ">=25.0.0"
+  },
+  "packageManager": "pnpm@10.26.1",
+  "pi": {
+    "extensions": [
+      "./packages/pi/src/index.ts"
+    ],
+    "skills": [
+      "./packages/skills"
+    ]
   }
 }

@@ -44,12 +44,7 @@ Search options:
 async function main() {
   const args = process.argv.slice(2);
 
-  if (
-    args.length === 0 ||
-    args[0] === "help" ||
-    args[0] === "--help" ||
-    args[0] === "-h"
-  ) {
+  if (args.length === 0 || args[0] === "help" || args[0] === "--help" || args[0] === "-h") {
     printUsage();
     process.exit(0);
   }
@@ -67,11 +62,9 @@ async function main() {
     const commandModule = await commands[commandName]();
     await commandModule.default(commandArgs);
   } catch (error) {
-    console.error(
-      `Error: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
 }
 
-main();
+void main();

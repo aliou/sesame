@@ -4,12 +4,7 @@
 
 import { readFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
-import type {
-  ParsedSession,
-  SessionParser,
-  ToolCall,
-  Turn,
-} from "../types/session";
+import type { ParsedSession, SessionParser, ToolCall, Turn } from "../types/session";
 
 interface SessionHeader {
   type: "session";
@@ -48,11 +43,7 @@ interface ThinkingContent {
   thinking: string;
 }
 
-type ContentBlock =
-  | TextContent
-  | ImageContent
-  | ToolCallContent
-  | ThinkingContent;
+type ContentBlock = TextContent | ImageContent | ToolCallContent | ThinkingContent;
 
 interface UserMessage {
   type: "message";
@@ -334,9 +325,7 @@ export class PiParser implements SessionParser {
               });
             } else if (msg.message.role === "toolResult") {
               const toolResultMsg = msg as ToolResultMessage;
-              const textContent = extractTextContent(
-                toolResultMsg.message.content,
-              );
+              const textContent = extractTextContent(toolResultMsg.message.content);
               turns.push({
                 role: "system",
                 textContent,
@@ -416,10 +405,11 @@ export class PiParser implements SessionParser {
             // Skip metadata/extension state lines (not part of LLM context)
             break;
 
-          default:
-            console.error(
-              `Warning: Unknown line type at line ${index + 1}: ${(parsed as Record<string, unknown>).type}`,
-            );
+          default: {
+            const lineType = JSON.stringify((parsed as { type?: unknown }).type) ?? '"unknown"';
+            console.error(`Warning: Unknown line type at line ${index + 1}: ${lineType}`);
+            break;
+          }
         }
       } catch (error) {
         console.error(

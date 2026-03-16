@@ -17,7 +17,6 @@ From `@aliou/sesame`:
 - Config: `loadConfig`, `expandPath`, `getXDGPaths`
 - Helpers/types: `parseRelativeDate` and core TS types
 
-
 ## Minimal example
 
 ```ts

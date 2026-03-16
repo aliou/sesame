@@ -50,11 +50,7 @@ export function createReindexQueue(
           break;
         }
 
-        log(
-          "[%s] Re-indexing %d source(s)...",
-          new Date().toISOString(),
-          sources.length,
-        );
+        log("[%s] Re-indexing %d source(s)...", new Date().toISOString(), sources.length);
         await runBatch(sources);
       }
     } finally {

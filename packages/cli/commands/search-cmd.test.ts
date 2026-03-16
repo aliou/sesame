@@ -1,5 +1,5 @@
 import * as sesameModule from "@aliou/sesame";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import searchCommand from "./search-cmd";
 
 vi.mock("@aliou/sesame", () => ({
@@ -29,14 +29,7 @@ describe("search command", () => {
   });
 
   test("parses repeatable --exclude flag", async () => {
-    await searchCommand([
-      "query",
-      "--exclude",
-      "session-1",
-      "--exclude",
-      "session-2",
-      "--json",
-    ]);
+    await searchCommand(["query", "--exclude", "session-1", "--exclude", "session-2", "--json"]);
 
     expect(sesameModule.search).toHaveBeenCalledWith(
       expect.anything(),
