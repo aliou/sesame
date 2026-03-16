@@ -13,25 +13,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup Node
-        uses: actions/setup-node@v6
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
           node-version: 25
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+          cache: true
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: vp install
 
-      - name: Lint
-        run: pnpm run lint
-
-      - name: Build
-        run: pnpm run build
+      - name: Check
+        run: vp check
 
       - name: Test
-        run: pnpm run test
+        run: vp test
+
+      - name: Build
+        run: vp run build
 
   build-binary:
     strategy:
@@ -51,24 +49,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup Node
-        uses: actions/setup-node@v6
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
           node-version: 25
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+          cache: true
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: vp install
 
       - name: Build SEA binary
-        run: pnpm --filter @aliou/sesame-cli run build:binary
+        run: vp run build:binary
 
       - name: Verify binary was produced
         run: |
           if [ ! -f packages/cli/dist/sesame ]; then
-            echo "ERROR: SEA binary was not produced. tsdown may have silently failed."
+            echo "ERROR: SEA binary was not produced. pack may have silently failed."
             echo "Contents of packages/cli/dist/:"
             ls -la packages/cli/dist/
             exit 1

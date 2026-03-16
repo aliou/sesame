@@ -131,8 +131,7 @@ export async function indexSessions(
             tool_name: turn.toolName ?? null,
             seq: seq++,
             content: turn.textContent,
-            is_error:
-              turn.isError !== undefined ? (turn.isError ? 1 : 0) : null,
+            is_error: turn.isError !== undefined ? (turn.isError ? 1 : 0) : null,
             entry_id: turn.entryId ?? null,
             parent_entry_id: turn.parentEntryId ?? null,
             timestamp: turn.timestamp ?? null,

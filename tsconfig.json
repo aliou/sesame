@@ -15,9 +15,6 @@
     "sourceMap": true,
     "noEmit": true
   },
-  "references": [
-    { "path": "packages/sesame" },
-    { "path": "packages/cli" }
-  ],
+  "references": [{ "path": "packages/sesame" }, { "path": "packages/cli" }],
   "files": []
 }

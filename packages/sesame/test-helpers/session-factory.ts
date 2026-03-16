@@ -3,11 +3,7 @@
  */
 
 export interface SessionBuilder {
-  withHeader(data?: {
-    id?: string;
-    cwd?: string;
-    timestamp?: string;
-  }): SessionBuilder;
+  withHeader(data?: { id?: string; cwd?: string; timestamp?: string }): SessionBuilder;
   withName(name: string): SessionBuilder;
   withUserMessage(text: string): SessionBuilder;
   withAssistantMessage(text: string): SessionBuilder;
@@ -113,11 +109,7 @@ export function createSessionBuilder(): SessionBuilder {
       return this;
     },
 
-    withToolResult(
-      toolName: string,
-      content: string,
-      options?: { isError?: boolean },
-    ) {
+    withToolResult(toolName: string, content: string, options?: { isError?: boolean }) {
       lines.push(
         JSON.stringify({
           type: "message",

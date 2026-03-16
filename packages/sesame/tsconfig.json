@@ -18,6 +18,14 @@
     "resolveJsonModule": true,
     "noEmit": false
   },
-  "include": ["index.ts", "indexer/**/*", "parsers/**/*", "storage/**/*", "types/**/*", "utils/**/*", "test-helpers/**/*"],
+  "include": [
+    "index.ts",
+    "indexer/**/*",
+    "parsers/**/*",
+    "storage/**/*",
+    "types/**/*",
+    "utils/**/*",
+    "test-helpers/**/*"
+  ],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }

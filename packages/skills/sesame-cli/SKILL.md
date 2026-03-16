@@ -10,6 +10,7 @@ Sesame indexes coding agent sessions into SQLite FTS5 and ranks results with BM2
 ## When to use
 
 Use **sesame** when you need:
+
 - Multi-word topic search (`"nix infra cleanup"`, `"publish workflow changesets"`)
 - Tool-call oriented search (`--tools`, `--tool bash`, `--path package.json`)
 - Session discovery / paging (`"*"` with filters and `--exclude`)

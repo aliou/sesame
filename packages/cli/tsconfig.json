@@ -5,7 +5,6 @@
     "lib": ["ES2022"],
     "moduleResolution": "bundler",
     "types": ["node"],
-    "baseUrl": ".",
     "paths": {
       "@aliou/sesame": ["../sesame/index.ts"]
     },

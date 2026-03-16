@@ -2,6 +2,22 @@
   "name": "@aliou/sesame",
   "version": "0.8.0",
   "description": "Semantic search for coding agent sessions",
+  "keywords": [
+    "coding-agent",
+    "pi",
+    "semantic-search",
+    "sqlite"
+  ],
+  "license": "MIT",
+  "author": "Aliou Diallo",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aliou/sesame",
+    "directory": "packages/sesame"
+  },
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -9,34 +25,19 @@
       "default": "./dist/index.js"
     }
   },
-  "files": [
-    "dist"
-  ],
-  "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
-    "test": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest run",
-    "prepublishOnly": "pnpm run build"
-  },
-  "keywords": [
-    "semantic-search",
-    "coding-agent",
-    "pi",
-    "sqlite"
-  ],
-  "author": "Aliou Diallo",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/aliou/sesame",
-    "directory": "packages/sesame"
-  },
   "publishConfig": {
     "access": "public"
   },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vp test run",
+    "prepublishOnly": "pnpm run build"
+  },
   "devDependencies": {
     "@types/node": "^22.15.30",
-    "vitest": "^4.0.18"
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   },
   "engines": {
     "node": ">=25.0.0"

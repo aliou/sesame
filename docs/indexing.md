@@ -9,6 +9,7 @@ Indexing converts session files into normalized records in SQLite:
 - `chunks_fts` table: FTS5 index on chunk content
 
 Flow:
+
 1. Load config sources (`~/.config/sesame/config.jsonc` by default)
 2. Scan source directories
 3. Parse session files (`pi` parser)
@@ -53,6 +54,7 @@ This keeps index fast for large session directories.
 - compaction summaries
 
 Ignored lines:
+
 - model/thinking level metadata lines
 
 ## Chunking
@@ -116,6 +118,7 @@ erDiagram
 ```
 
 Also present (not shown above):
+
 - `metadata` for values like `last_sync_at`
 - `schema_migrations` for migration tracking
 
@@ -124,6 +127,7 @@ Also present (not shown above):
 `sesame index --full` calls `dropAll()` then re-runs indexing.
 
 `dropAll()`:
+
 - drops triggers/indexes/tables
 - recreates schema
 - marks migrations applied for fresh schema
@@ -131,5 +135,6 @@ Also present (not shown above):
 ## Metadata
 
 Indexing updates `metadata.last_sync_at` when run has:
+
 - zero errors
 - at least one added or updated session

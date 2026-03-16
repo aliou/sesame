@@ -15,9 +15,7 @@ export default {
     db.exec(`ALTER TABLE chunks ADD COLUMN source_type TEXT`);
 
     // Add indexes for tree queries
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id)`,
-    );
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_chunks_entry ON chunks(entry_id)`);
   },
 };

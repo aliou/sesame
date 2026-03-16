@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import indexCommand from "./index-cmd";
 
 const mockIndexSessions = vi.fn();
@@ -61,10 +61,7 @@ describe("index command lock behavior", () => {
   test("acquires and releases lock around indexing", async () => {
     await indexCommand([]);
 
-    expect(mockAcquireIndexLock).toHaveBeenCalledWith(
-      "/tmp/sesame-test-data",
-      "index",
-    );
+    expect(mockAcquireIndexLock).toHaveBeenCalledWith("/tmp/sesame-test-data", "index");
     expect(db.close).toHaveBeenCalledTimes(1);
     expect(release).toHaveBeenCalledTimes(1);
   });

@@ -17,7 +17,6 @@
 ### Minor Changes
 
 - 54d0fca: Migrate from Bun to Node 25 + tsdown SEA for binary builds.
-
   - Replace `bun:sqlite` with `node:sqlite` as the sole SQLite backend.
   - Replace `bun build --compile` with tsdown exe (Node SEA) for standalone binaries.
   - Migrate CLI tests from `bun:test` to vitest.
@@ -35,7 +34,6 @@
 ### Minor Changes
 
 - 5e1475e: Add support for session forks and custom_message entries
-
   - Parse and index `custom_message` entries (extension-injected LLM context)
   - Track session fork relationships via `parent_session_id`
   - Track entry tree structure via `entry_id`, `parent_entry_id`, `timestamp`, `source_type` on chunks
@@ -85,7 +83,6 @@
 - 8beab04: Migrate runtime from Bun APIs to Node.js APIs and switch project workflows to pnpm while keeping Bun only for binary builds.
 
   Key updates:
-
   - use `node:sqlite` instead of `bun:sqlite`
   - replace Bun file APIs with Node fs APIs
   - run tests with Vitest
@@ -101,7 +98,6 @@
 ### Minor Changes
 
 - c0e3f3e: Initial release: BM25 full-text search over coding agent sessions.
-
   - Pi JSONL session parser with support for messages, tool calls, and compaction summaries
   - SQLite + FTS5 storage with BM25 ranking and porter stemming
   - CLI commands: index, search, status

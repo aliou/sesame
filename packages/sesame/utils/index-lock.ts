@@ -1,11 +1,4 @@
-import {
-  closeSync,
-  openSync,
-  readFileSync,
-  statSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { closeSync, openSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 interface LockFileData {
@@ -74,10 +67,7 @@ function removeStaleLockIfSafe(lockPath: string): boolean {
   return false;
 }
 
-export function acquireIndexLock(
-  dataDir: string,
-  holder: string,
-): IndexLockHandle {
+export function acquireIndexLock(dataDir: string, holder: string): IndexLockHandle {
   const lockPath = join(dataDir, "index.lock");
 
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -127,9 +117,7 @@ export function acquireIndexLock(
         const owner = data?.holder ?? "unknown";
         const pid = data?.pid ? ` pid=${data.pid}` : "";
         const startedAt = data?.startedAt ? ` startedAt=${data.startedAt}` : "";
-        throw new Error(
-          `Index already running (${owner}${pid}${startedAt}). Try again later.`,
-        );
+        throw new Error(`Index already running (${owner}${pid}${startedAt}). Try again later.`);
       }
 
       throw error;

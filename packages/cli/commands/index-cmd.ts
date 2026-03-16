@@ -51,9 +51,7 @@ export default async function indexCommand(args: string[]): Promise<void> {
 
       // Get parser (only "pi" is supported for now)
       if (source.parser !== "pi") {
-        console.error(
-          `Skipping source ${source.path}: unsupported parser "${source.parser}"`,
-        );
+        console.error(`Skipping source ${source.path}: unsupported parser "${source.parser}"`);
         continue;
       }
 

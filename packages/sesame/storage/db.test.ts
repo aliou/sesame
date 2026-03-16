@@ -1,6 +1,6 @@
 import { unlinkSync } from "node:fs";
 import { createRequire } from "node:module";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 import {
   deleteSession,
   dropAll,
@@ -17,9 +17,7 @@ import {
 const require = createRequire(import.meta.url);
 
 const nodeSqlite = require("node:sqlite") as {
-  DatabaseSync: new (
-    path: string,
-  ) => {
+  DatabaseSync: new (path: string) => {
     exec: (sql: string) => void;
     close: () => void;
   };
@@ -62,9 +60,7 @@ describe("Database operations", () => {
 
     // Verify tables exist by querying sqlite_master
     const tables = db
-      .prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
-      )
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
       .all() as Array<{ name: string }>;
 
     const tableNames = tables.map((t) => t.name);
@@ -108,25 +104,19 @@ describe("Database operations", () => {
 
     db = openDatabase(dbPath);
 
-    const sessionColumns = db
-      .prepare("PRAGMA table_info(sessions)")
-      .all() as Array<{
+    const sessionColumns = db.prepare("PRAGMA table_info(sessions)").all() as Array<{
       name: string;
     }>;
-    const chunkColumns = db
-      .prepare("PRAGMA table_info(chunks)")
-      .all() as Array<{
+    const chunkColumns = db.prepare("PRAGMA table_info(chunks)").all() as Array<{
       name: string;
     }>;
 
-    expect(sessionColumns.map((column) => column.name)).toContain(
-      "parent_session_id",
-    );
+    expect(sessionColumns.map((column) => column.name)).toContain("parent_session_id");
     expect(chunkColumns.map((column) => column.name)).toContain("entry_id");
 
-    const indexes = db
-      .prepare("SELECT name FROM sqlite_master WHERE type='index'")
-      .all() as Array<{ name: string }>;
+    const indexes = db.prepare("SELECT name FROM sqlite_master WHERE type='index'").all() as Array<{
+      name: string;
+    }>;
 
     const indexNames = indexes.map((index) => index.name);
     expect(indexNames).toContain("idx_sessions_parent");
@@ -500,9 +490,7 @@ describe("Database operations", () => {
     expect(results).toHaveLength(0);
 
     // Verify chunks are also gone
-    const chunkCount = db
-      .prepare("SELECT COUNT(*) as count FROM chunks")
-      .get() as {
+    const chunkCount = db.prepare("SELECT COUNT(*) as count FROM chunks").get() as {
       count: number;
     };
     expect(chunkCount.count).toBe(0);

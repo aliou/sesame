@@ -3,17 +3,24 @@
   "version": "0.8.0",
   "private": true,
   "description": "Pi coding agent extension for Sesame session search",
-  "type": "module",
-  "author": "Aliou Diallo",
   "license": "MIT",
+  "author": "Aliou Diallo",
   "repository": {
     "type": "git",
     "url": "https://github.com/aliou/sesame",
     "directory": "packages/pi"
   },
+  "type": "module",
   "devDependencies": {
-    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-coding-agent": "^0.58.3",
+    "@mariozechner/pi-tui": "^0.58.3",
+    "@sinclair/typebox": "^0.34.48",
     "@types/node": "^22.15.30"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*",
+    "@sinclair/typebox": "*"
   },
   "engines": {
     "node": ">=25.0.0"

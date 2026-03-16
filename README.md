@@ -12,27 +12,27 @@ Search coding-agent sessions with local BM25 full-text search (SQLite FTS5).
 ## Quickstart (repo)
 
 ```bash
-pnpm install
-pnpm run build
+vp install
+vp run build
 ```
 
 Index sessions:
 
 ```bash
-pnpm run dev index
+vp run dev index
 ```
 
 Search:
 
 ```bash
-pnpm run dev search "nix infra simplify"
-pnpm run dev search "package.json exports" --tools --tool write
+vp run dev search "nix infra simplify"
+vp run dev search "package.json exports" --tools --tool write
 ```
 
 Check index:
 
 ```bash
-pnpm run dev status
+vp run dev status
 ```
 
 ## CLI docs
@@ -55,7 +55,7 @@ Monorepo packages:
 ## Development
 
 ```bash
-pnpm run lint
-pnpm test
-pnpm run typecheck
+vp check
+vp test
+vp run build
 ```
