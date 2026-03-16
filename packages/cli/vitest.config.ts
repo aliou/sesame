@@ -9,6 +9,6 @@ export default defineConfig({
   },
   test: {
     include: ["**/*.test.ts"],
-    exclude: ["test/**", "node_modules/**"],
+    exclude: ["test/**", "dist/**", "node_modules/**"],
   },
 });

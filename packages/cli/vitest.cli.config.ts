@@ -9,6 +9,7 @@ export default defineConfig({
   },
   test: {
     include: ["test/**/*.test.ts"],
+    exclude: ["dist/**", "node_modules/**"],
     testTimeout: 120_000,
   },
 });
