@@ -144,18 +144,18 @@ jobs:
 
       - name: Verify binary was produced
         run: |
-          if [ ! -f packages/cli/dist/sesame ]; then
+          if [ ! -f packages/cli/build/sesame ]; then
             echo "ERROR: SEA binary was not produced. pack may have silently failed."
-            echo "Contents of packages/cli/dist/:"
-            ls -la packages/cli/dist/
+            echo "Contents of packages/cli/build/:"
+            ls -la packages/cli/build/
             exit 1
           fi
 
       - name: Rename binary
-        run: mv packages/cli/dist/sesame packages/cli/dist/${{ matrix.artifact }}
+        run: mv packages/cli/build/sesame packages/cli/build/${{ matrix.artifact }}
 
       - name: Upload to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: v${{ needs.publish.outputs.version }}
-        run: gh release upload "$TAG" packages/cli/dist/${{ matrix.artifact }} --clobber
+        run: gh release upload "$TAG" packages/cli/build/${{ matrix.artifact }} --clobber
