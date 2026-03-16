@@ -21,7 +21,7 @@
     "resolveJsonModule": true,
     "noEmit": false
   },
-  "include": ["sesame.ts", "commands/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts"],
+  "include": ["sesame.ts", "commands/**/*", "test/**/*", "**/*.test.ts", "vitest*.config.ts"],
+  "exclude": ["node_modules", "dist"],
   "references": [{ "path": "../sesame" }]
 }

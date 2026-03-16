@@ -25,7 +25,7 @@ describe("compiled binary", () => {
         stdio: "pipe",
       });
 
-      const outFile = join(tmpRoot, "build", "sesame");
+      const outFile = join(tmpRoot, "sesame");
 
       const xdgDataHome = join(tmpRoot, "xdg-data");
       const xdgConfigHome = join(tmpRoot, "xdg-config");
