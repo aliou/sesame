@@ -13,7 +13,7 @@ pnpm add @aliou/sesame
 From `@aliou/sesame`:
 
 - DB: `openDatabase`, `search`, `insertSession`, `deleteSession`, `dropAll`, `getStats`, `getSessionMtime`
-- Parser/indexer: `PiParser`, `indexSessions`
+- Indexer/parser: `indexSessions` (Pi-only) and `PiParser`
 - Config: `loadConfig`, `expandPath`, `getXDGPaths`
 - Helpers/types: `parseRelativeDate` and core TS types
 
@@ -22,15 +22,14 @@ From `@aliou/sesame`:
 
 ```ts
 import { join } from "node:path";
-import { indexSessions, openDatabase, PiParser, search } from "@aliou/sesame";
+import { indexSessions, openDatabase, search } from "@aliou/sesame";
 import { getXDGPaths } from "@aliou/sesame";
 
 const paths = getXDGPaths();
 const db = openDatabase(join(paths.data, "index.sqlite"));
 
 try {
-  const parser = new PiParser();
-  await indexSessions(db, "/Users/me/.pi/agent/sessions", parser);
+  await indexSessions(db, "/Users/me/.pi/agent/sessions");
 
   const results = search(db, "release workflow", {
     limit: 5,

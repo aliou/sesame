@@ -37,7 +37,7 @@ describe("index command lock behavior", () => {
       cache: "/tmp/sesame-test-cache",
     });
     mockLoadConfig.mockResolvedValue({
-      sources: [{ path: "/tmp/sessions", parser: "pi" }],
+      piSessionPaths: ["/tmp/sessions"],
     });
     mockOpenDatabase.mockReturnValue(db);
     mockAcquireIndexLock.mockReturnValue({

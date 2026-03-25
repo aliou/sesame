@@ -13,7 +13,6 @@ import {
   indexSessions,
   loadConfig,
   openDatabase,
-  PiParser,
   setMetadata,
 } from "@aliou/sesame";
 import { createReindexQueue, type SourceConfig } from "./watch-queue";
@@ -67,6 +66,8 @@ export default async function watchCommand(args: string[]): Promise<void> {
     console.error,
   );
 
+  const sources = config.piSessionPaths.map((path) => ({ path }));
+
   // Set up graceful shutdown
   const shutdown = () => {
     if (state.isShuttingDown) {
@@ -109,7 +110,7 @@ export default async function watchCommand(args: string[]): Promise<void> {
 
     // Run initial index pass
     console.error("[%s] Running initial index...", new Date().toISOString());
-    await runIndexing(state, config.sources);
+    await runIndexing(state, sources);
 
     if (pollInterval) {
       // Polling mode
@@ -121,7 +122,7 @@ export default async function watchCommand(args: string[]): Promise<void> {
 
       state.intervalId = setInterval(() => {
         if (!state.isShuttingDown) {
-          reindexQueue.enqueue(config.sources, "scheduled");
+          reindexQueue.enqueue(sources, "scheduled");
         }
       }, pollInterval);
     } else {
@@ -131,18 +132,8 @@ export default async function watchCommand(args: string[]): Promise<void> {
         new Date().toISOString(),
       );
 
-      for (const source of config.sources) {
+      for (const source of sources) {
         const expandedPath = expandPath(source.path);
-
-        if (source.parser !== "pi") {
-          console.error(
-            "[%s] Skipping watch for %s: unsupported parser '%s'",
-            new Date().toISOString(),
-            source.path,
-            source.parser,
-          );
-          continue;
-        }
 
         try {
           const watcher = watch(
@@ -234,14 +225,8 @@ async function runIndexing(
   for (const source of sources) {
     const expandedPath = expandPath(source.path);
 
-    if (source.parser !== "pi") {
-      continue;
-    }
-
-    const parser = new PiParser();
-
     try {
-      const result = await indexSessions(state.db, expandedPath, parser);
+      const result = await indexSessions(state.db, expandedPath);
       totalAdded += result.added;
       totalUpdated += result.updated;
       totalErrors += result.errors;

@@ -12,7 +12,6 @@ import {
   indexSessions,
   loadConfig,
   openDatabase,
-  PiParser,
   setMetadata,
 } from "@aliou/sesame";
 
@@ -45,22 +44,11 @@ export default async function indexCommand(args: string[]): Promise<void> {
     let totalSkipped = 0;
     let totalErrors = 0;
 
-    // Index each source
-    for (const source of config.sources) {
-      const expandedPath = expandPath(source.path);
-
-      // Get parser (only "pi" is supported for now)
-      if (source.parser !== "pi") {
-        console.error(
-          `Skipping source ${source.path}: unsupported parser "${source.parser}"`,
-        );
-        continue;
-      }
-
-      const parser = new PiParser();
+    for (const path of config.piSessionPaths) {
+      const expandedPath = expandPath(path);
 
       console.log(`\nIndexing ${expandedPath}...`);
-      const result = await indexSessions(db, expandedPath, parser);
+      const result = await indexSessions(db, expandedPath);
 
       // Print results for this source
       if (result.added > 0) {

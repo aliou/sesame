@@ -9,16 +9,16 @@ Indexing converts session files into normalized records in SQLite:
 - `chunks_fts` table: FTS5 index on chunk content
 
 Flow:
-1. Load config sources (`~/.config/sesame/config.jsonc` by default)
-2. Scan source directories
-3. Parse session files (`pi` parser)
+1. Load config Pi session paths (`~/.config/sesame/config.jsonc`, key: `piSessionPaths`)
+2. Scan Pi session directories
+3. Parse session files (Pi JSONL parser)
 4. Build chunks
 5. Upsert via delete + insert per changed session
 
 ```mermaid
 flowchart TD
   A[sesame index] --> B[load config]
-  B --> C[scan source directories]
+  B --> C[scan Pi session directories]
   C --> D{mtime changed?}
   D -- no --> E[skip file]
   D -- yes --> F[parse JSONL with PiParser]

@@ -2,7 +2,6 @@ import { expandPath } from "@aliou/sesame";
 
 export type SourceConfig = {
   path: string;
-  parser: string;
 };
 
 type RunBatch = (sources: SourceConfig[]) => Promise<void>;

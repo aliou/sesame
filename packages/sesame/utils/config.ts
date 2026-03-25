@@ -6,25 +6,16 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ensureDir, getXDGPaths } from "./xdg";
 
-export interface SessionSource {
-  parser: string;
-  path: string;
-}
-
 export interface SesameConfig {
-  sources: SessionSource[];
+  /** Absolute or ~-prefixed paths to Pi session roots */
+  piSessionPaths: string[];
 }
 
 /**
  * Default configuration
  */
 export const DEFAULT_CONFIG: SesameConfig = {
-  sources: [
-    {
-      parser: "pi",
-      path: "~/.pi/agent/sessions",
-    },
-  ],
+  piSessionPaths: ["~/.pi/agent/sessions"],
 };
 
 /**
@@ -47,11 +38,16 @@ export async function loadConfig(): Promise<SesameConfig> {
 
   try {
     const text = await readFile(configPath, "utf-8");
-    const parsed = parseJSONC(text) as Partial<SesameConfig>;
+    const parsed = parseJSONC(text) as {
+      piSessionPaths?: string[];
+    };
 
-    // Merge with defaults
+    if (!Array.isArray(parsed.piSessionPaths)) {
+      return DEFAULT_CONFIG;
+    }
+
     return {
-      sources: parsed.sources ?? DEFAULT_CONFIG.sources,
+      piSessionPaths: parsed.piSessionPaths,
     };
   } catch (error) {
     // Config doesn't exist, create it with defaults

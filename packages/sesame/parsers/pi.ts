@@ -4,12 +4,7 @@
 
 import { readFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
-import type {
-  ParsedSession,
-  SessionParser,
-  ToolCall,
-  Turn,
-} from "../types/session";
+import type { ParsedSession, ToolCall, Turn } from "../types/session";
 
 interface SessionHeader {
   type: "session";
@@ -226,7 +221,7 @@ function extractSessionIdFromPath(path: string): string | undefined {
   return undefined;
 }
 
-export class PiParser implements SessionParser {
+export class PiParser {
   id = "pi";
 
   async canParse(path: string): Promise<boolean> {

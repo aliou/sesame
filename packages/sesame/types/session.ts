@@ -1,7 +1,6 @@
 /**
- * Normalized session types
- * These types are format-agnostic and represent the parsed structure
- * that all session parsers produce.
+ * Normalized Pi session types
+ * These types represent the parsed structure produced by PiParser.
  */
 
 export interface CodeBlock {
@@ -43,7 +42,7 @@ export interface Turn {
 
 export interface ParsedSession {
   id: string;
-  /** Parser ID that produced this session */
+  /** Source parser ID (`"pi"`) */
   source: string;
   /** Working directory when session was created */
   cwd?: string;
@@ -54,18 +53,4 @@ export interface ParsedSession {
   turns: Turn[];
   /** ID of parent session (if this session was forked from another) */
   parentSessionId?: string;
-}
-
-/**
- * Session parser interface
- */
-export interface SessionParser {
-  /** Unique identifier for this parser (e.g., "pi") */
-  id: string;
-
-  /** Detect whether a file/directory belongs to this parser */
-  canParse(path: string): Promise<boolean>;
-
-  /** Parse a session file into a normalized structure */
-  parse(path: string): Promise<ParsedSession>;
 }

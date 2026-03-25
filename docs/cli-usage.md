@@ -15,7 +15,7 @@ All commands operate on the same SQLite index database (`index.sqlite`).
 
 ## `sesame index`
 
-Builds/updates the local index from configured session sources.
+Builds/updates the local index from configured Pi session paths (`piSessionPaths` in `~/.config/sesame/config.jsonc`).
 
 - default: incremental (mtime-based)
 - `--full`: drop DB content and rebuild everything

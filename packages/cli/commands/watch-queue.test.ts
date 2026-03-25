@@ -27,14 +27,14 @@ describe("createReindexQueue", () => {
       vi.fn(),
     );
 
-    queue.enqueue([{ path: "/tmp/a", parser: "pi" }], "initial");
+    queue.enqueue([{ path: "/tmp/a" }], "initial");
     await Promise.resolve();
 
-    queue.enqueue([{ path: "/tmp/a", parser: "pi" }], "dup");
-    queue.enqueue([{ path: "/tmp/b", parser: "pi" }], "new");
+    queue.enqueue([{ path: "/tmp/a" }], "dup");
+    queue.enqueue([{ path: "/tmp/b" }], "new");
 
     expect(batches).toHaveLength(1);
-    expect(batches[0]).toEqual([{ path: "/tmp/a", parser: "pi" }]);
+    expect(batches[0]).toEqual([{ path: "/tmp/a" }]);
 
     first.resolve();
     await queue.waitForIdle();
@@ -59,9 +59,9 @@ describe("createReindexQueue", () => {
       vi.fn(),
     );
 
-    queue.enqueue([{ path: "/tmp/a", parser: "pi" }], "1");
-    queue.enqueue([{ path: "/tmp/b", parser: "pi" }], "2");
-    queue.enqueue([{ path: "/tmp/c", parser: "pi" }], "3");
+    queue.enqueue([{ path: "/tmp/a" }], "1");
+    queue.enqueue([{ path: "/tmp/b" }], "2");
+    queue.enqueue([{ path: "/tmp/c" }], "3");
 
     await queue.waitForIdle();
 
@@ -76,8 +76,8 @@ describe("createReindexQueue", () => {
 
     const queue = createReindexQueue(runBatch, () => shuttingDown, vi.fn());
 
-    queue.enqueue([{ path: "/tmp/a", parser: "pi" }], "first");
-    queue.enqueue([{ path: "/tmp/b", parser: "pi" }], "second");
+    queue.enqueue([{ path: "/tmp/a" }], "first");
+    queue.enqueue([{ path: "/tmp/b" }], "second");
 
     await queue.waitForIdle();
 

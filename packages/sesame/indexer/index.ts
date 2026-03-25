@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { PiParser } from "../parsers/pi";
 import {
   type Database,
   deleteSession,
@@ -8,7 +9,6 @@ import {
   type StoredChunk,
   type StoredSession,
 } from "../storage/db";
-import type { SessionParser } from "../types/session";
 import { formatToolCall } from "./format-tool-call";
 
 function readFirstLine(filePath: string): string | null {
@@ -31,7 +31,6 @@ export interface IndexResult {
 export async function indexSessions(
   db: Database,
   sessionsDir: string,
-  parser: SessionParser,
 ): Promise<IndexResult> {
   const result: IndexResult = {
     added: 0,
@@ -64,6 +63,8 @@ export async function indexSessions(
     console.error(`Failed to read directory ${sessionsDir}:`, error);
     return result;
   }
+
+  const parser = new PiParser();
 
   for (const filePath of filePaths) {
     // Skip if parser can't handle this file
