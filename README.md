@@ -49,7 +49,7 @@ See [`docs/cli-usage.md`](./docs/cli-usage.md).
 
 Monorepo package:
 
-- `packages/skills/sesame-cli/` (`@aliou/sesame-skill-cli`): pi skill for the Sesame CLI.
+- `skills/sesame/SKILL.md`: pi skill for the Sesame CLI.
 
 ## Development
 
