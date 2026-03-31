@@ -3,9 +3,6 @@
   "description": "Semantic search for coding agent sessions",
   "type": "module",
   "pi": {
-    "extensions": [
-      "./packages/pi/src/index.ts"
-    ],
     "skills": [
       "./packages/skills"
     ]

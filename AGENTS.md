@@ -21,7 +21,6 @@ This is a pnpm monorepo. Packages live under `packages/`:
   - `packages/cli/sesame.ts`: CLI entrypoint, lazy-dispatches `index|search|status|watch`.
   - `packages/cli/commands/*-cmd.ts`: CLI arg parsing + user output.
   - `packages/cli/tsdown.config.ts`: tsdown config for building the Node SEA binary.
-- `packages/pi/`: `@aliou/sesame-pi` — pi coding agent extension exposing the `sesame_search` tool (calls `sesame search --json`). Private, not published to npm.
 - `packages/skills/sesame-cli/`: `@aliou/sesame-skill-cli` — pi skill for the Sesame CLI (search, index, status, watch usage). Private, not published to npm.
 ## Docs map
 - `README.md`: project overview + quickstart.

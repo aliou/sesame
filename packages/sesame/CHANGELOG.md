@@ -107,5 +107,5 @@
   - CLI commands: index, search, status
   - Search filters: --cwd, --after, --before, --limit, --tools, --tool, --path
   - Tool call indexing with structured text formatting
-  - Pi extension (sesame_search tool) and skill file
+  - Pi skill file
   - JSON and human-readable output formats

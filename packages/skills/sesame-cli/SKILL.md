@@ -68,4 +68,3 @@ sesame watch --interval 30
 
 - Scores are normalized to `0.00-1.00` for display. Higher is better.
 - `sesame watch` runs an initial index pass, then re-indexes on change.
-- The `sesame_search` pi extension tool exposes only: `query`, `cwd`, `after`, `before`, `limit`.

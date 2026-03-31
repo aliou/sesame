@@ -47,9 +47,8 @@ See [`docs/cli-usage.md`](./docs/cli-usage.md).
 
 ## Pi integration
 
-Monorepo packages:
+Monorepo package:
 
-- `packages/pi/` (`@aliou/sesame-pi`): pi coding agent extension exposing the `sesame_search` tool.
 - `packages/skills/sesame-cli/` (`@aliou/sesame-skill-cli`): pi skill for the Sesame CLI.
 
 ## Development
