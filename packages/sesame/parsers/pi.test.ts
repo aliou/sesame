@@ -1,8 +1,8 @@
 import { unlinkSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { afterEach, describe, expect, test } from "vitest";
-import { createSessionBuilder } from "../test-helpers/session-factory.ts";
-import { PiParser } from "./pi.ts";
+import { createSessionBuilder } from "../test-helpers/session-factory";
+import { PiParser } from "./pi";
 
 describe("PiParser", () => {
   const parser = new PiParser();
@@ -14,7 +14,8 @@ describe("PiParser", () => {
       try {
         unlinkSync(file);
       } catch {
-        // Ignore errors if file doesn't exist
+        // File may not exist, ignore
+        void 0;
       }
     }
     tempFiles = [];

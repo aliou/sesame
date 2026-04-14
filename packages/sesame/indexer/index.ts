@@ -54,6 +54,7 @@ export async function indexSessions(
           }
         } catch {
           // Skip unreadable subdirectories
+          void 0;
         }
       } else {
         filePaths.push(entryPath);

@@ -39,22 +39,30 @@ describe("Database operations", () => {
       try {
         db.close();
       } catch {
-        // Ignore if already closed
+        // May already be closed, ignore
+        void 0;
       }
       db = undefined;
     }
     try {
       unlinkSync(dbPath);
     } catch {
-      // Ignore if file doesn't exist
+      // File may not exist, ignore
+      void 0;
     }
     // Clean up WAL and SHM files
     try {
       unlinkSync(`${dbPath}-wal`);
-    } catch {}
+    } catch {
+      // WAL file may not exist, ignore
+      void 0;
+    }
     try {
       unlinkSync(`${dbPath}-shm`);
-    } catch {}
+    } catch {
+      // SHM file may not exist, ignore
+      void 0;
+    }
   });
 
   test("openDatabase creates tables and FTS index", () => {

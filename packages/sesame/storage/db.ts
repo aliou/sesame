@@ -609,6 +609,7 @@ export function getStats(db: Database): {
     }
   } catch {
     // If file doesn't exist or can't be read, size is 0
+    void 0;
   }
 
   return { sessionCount, chunkCount, dbSizeBytes, lastSyncAt };

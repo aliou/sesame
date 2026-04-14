@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseRelativeDate } from "./date.ts";
+import { parseRelativeDate } from "./date";
 
 describe("parseRelativeDate", () => {
   test("7d returns date 7 days ago", () => {

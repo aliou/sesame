@@ -69,6 +69,7 @@ function removeStaleLockIfSafe(lockPath: string): boolean {
     }
   } catch {
     // If stat fails, treat as not removable.
+    void 0;
   }
 
   return false;
@@ -108,7 +109,8 @@ export function acquireIndexLock(
           try {
             unlinkSync(lockPath);
           } catch {
-            // Ignore lock cleanup failures on shutdown.
+            // Lock cleanup failure is non-critical on shutdown.
+            void 0;
           }
         },
       };
