@@ -29,6 +29,6 @@ This is a pnpm monorepo. Packages live under `packages/`:
 - `docs/library-usage.md`: exported API and programmatic usage.
 - `docs/README.md`: docs index.
 ## Style / conventions
-- Imports: ESM, use `node:` built-ins, `import type` for types, imports at top (`no-inline-imports`), keep intentional dynamic import in `packages/cli/sesame.ts`.
+- Imports: ESM, use `node:` built-ins, `import type` for types, imports at top (`no-inline-imports`).
 - Formatting: Biome defaults (2 spaces, double quotes, organized imports).
 - Types/naming/errors: strict TS, avoid `any` outside tests, camelCase vars/functions + PascalCase types/classes + kebab-case files (`*-cmd.ts`); throw in libs, catch/print/exit at CLI boundary, continue logging per-file/per-line parse/index failures.

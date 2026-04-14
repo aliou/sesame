@@ -4,15 +4,19 @@
  * Main CLI entry point
  */
 
-const commands = {
-  index: () => import("./commands/index-cmd"),
-  search: () => import("./commands/search-cmd"),
-  status: () => import("./commands/status-cmd"),
-  watch: () => import("./commands/watch-cmd"),
-  help: () =>
-    Promise.resolve({
-      default: (..._args: unknown[]) => Promise.resolve(printUsage()),
-    }),
+import indexCommand from "./commands/index-cmd";
+import searchCommand from "./commands/search-cmd";
+import statusCommand from "./commands/status-cmd";
+import watchCommand from "./commands/watch-cmd";
+
+const commands: Record<string, (args: string[]) => Promise<void>> = {
+  index: indexCommand,
+  search: searchCommand,
+  status: statusCommand,
+  watch: watchCommand,
+  help: async (_args: string[]) => {
+    printUsage();
+  },
 };
 
 type Command = keyof typeof commands;
@@ -64,8 +68,7 @@ async function main() {
   }
 
   try {
-    const commandModule = await commands[commandName]();
-    await commandModule.default(commandArgs);
+    await commands[commandName](commandArgs);
   } catch (error) {
     console.error(
       `Error: ${error instanceof Error ? error.message : String(error)}`,
