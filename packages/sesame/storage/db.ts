@@ -58,6 +58,14 @@ export interface SearchResult {
   matchedSnippet: string;
 }
 
+export interface ListSessionsOptions {
+  cwd?: string;
+  after?: string; // ISO date string
+  before?: string; // ISO date string
+  limit?: number; // default 50
+  offset?: number; // default 0
+}
+
 export interface SearchOptions {
   cwd?: string;
   after?: string; // ISO date string
@@ -584,6 +592,54 @@ export function search(
     .slice(0, limit);
 
   return results;
+}
+
+export function listSessions(
+  db: Database,
+  options: ListSessionsOptions = {},
+): StoredSession[] {
+  const {
+    cwd,
+    after,
+    before,
+    limit: rawLimit = 50,
+    offset: rawOffset = 0,
+  } = options;
+
+  const limit = Math.max(1, Math.min(rawLimit, 500));
+  const offset = Math.max(0, rawOffset);
+
+  let sql = "SELECT * FROM sessions WHERE 1=1";
+  const params: unknown[] = [];
+
+  if (cwd) {
+    const escaped = cwd.replace(/[%_]/g, "\\$&");
+    sql += " AND cwd LIKE ? ESCAPE '\\'";
+    params.push(`${escaped}%`);
+  }
+  if (after) {
+    sql += " AND created_at >= ?";
+    params.push(after);
+  }
+  if (before) {
+    sql += " AND created_at <= ?";
+    params.push(before);
+  }
+
+  sql += " ORDER BY modified_at DESC LIMIT ? OFFSET ?";
+  params.push(limit, offset);
+
+  const stmt = db.prepare(sql);
+  return stmt.all(...(params as [string])) as StoredSession[];
+}
+
+export function getSession(
+  db: Database,
+  sessionId: string,
+): StoredSession | null {
+  const stmt = db.prepare("SELECT * FROM sessions WHERE id = ?");
+  const row = stmt.get(sessionId) as StoredSession | undefined;
+  return row ?? null;
 }
 
 export function getStats(db: Database): {

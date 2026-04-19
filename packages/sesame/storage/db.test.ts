@@ -5,8 +5,10 @@ import {
   deleteSession,
   dropAll,
   getMetadata,
+  getSession,
   getStats,
   insertSession,
+  listSessions,
   openDatabase,
   type StoredChunk,
   type StoredSession,
@@ -1031,6 +1033,223 @@ describe("Database operations", () => {
 
     // Whitespace-only query also normalizes to "*"
     expect(() => search(db, " ")).not.toThrow();
+  });
+
+  describe("listSessions and getSession", () => {
+    function makeSession(
+      overrides: Partial<StoredSession> & { id: string },
+    ): StoredSession {
+      return {
+        source: "pi",
+        path: `/path/to/${overrides.id}.jsonl`,
+        cwd: "/home/user/project",
+        name: null,
+        created_at: "2026-01-15T10:00:00Z",
+        modified_at: "2026-01-15T10:00:00Z",
+        message_count: 1,
+        file_mtime: Date.now(),
+        parent_session_id: null,
+        ...overrides,
+      };
+    }
+
+    test("listSessions returns all sessions ordered by modified_at DESC", () => {
+      db = openDatabase(dbPath);
+
+      const session1 = makeSession({
+        id: "session-1",
+        modified_at: "2026-01-15T08:00:00Z",
+      });
+      const session2 = makeSession({
+        id: "session-2",
+        modified_at: "2026-01-15T10:00:00Z",
+      });
+      const session3 = makeSession({
+        id: "session-3",
+        modified_at: "2026-01-15T09:00:00Z",
+      });
+
+      insertSession(db, session1, []);
+      insertSession(db, session2, []);
+      insertSession(db, session3, []);
+
+      const results = listSessions(db);
+
+      expect(results).toHaveLength(3);
+      expect(results[0].id).toBe("session-2"); // Most recent
+      expect(results[1].id).toBe("session-3");
+      expect(results[2].id).toBe("session-1"); // Oldest
+    });
+
+    test("listSessions filters by cwd prefix", () => {
+      db = openDatabase(dbPath);
+
+      const sessionA = makeSession({
+        id: "session-a",
+        cwd: "/home/user/project-a",
+      });
+      const sessionB = makeSession({
+        id: "session-b",
+        cwd: "/home/user/project-b",
+      });
+      const sessionOther = makeSession({
+        id: "session-other",
+        cwd: "/other",
+      });
+
+      insertSession(db, sessionA, []);
+      insertSession(db, sessionB, []);
+      insertSession(db, sessionOther, []);
+
+      const results = listSessions(db, { cwd: "/home/user/project" });
+
+      expect(results).toHaveLength(2);
+      expect(results.map((s) => s.id).sort()).toEqual([
+        "session-a",
+        "session-b",
+      ]);
+    });
+
+    test("listSessions filters by after and before", () => {
+      db = openDatabase(dbPath);
+
+      const sessionOld = makeSession({
+        id: "session-old",
+        created_at: "2026-01-01T10:00:00Z",
+      });
+      const sessionMid = makeSession({
+        id: "session-mid",
+        created_at: "2026-01-15T10:00:00Z",
+      });
+      const sessionNew = makeSession({
+        id: "session-new",
+        created_at: "2026-02-01T10:00:00Z",
+      });
+
+      insertSession(db, sessionOld, []);
+      insertSession(db, sessionMid, []);
+      insertSession(db, sessionNew, []);
+
+      const afterResults = listSessions(db, { after: "2026-01-10" });
+      expect(afterResults).toHaveLength(2);
+      expect(afterResults.map((s) => s.id).sort()).toEqual([
+        "session-mid",
+        "session-new",
+      ]);
+
+      const beforeResults = listSessions(db, { before: "2026-01-20" });
+      expect(beforeResults).toHaveLength(2);
+      expect(beforeResults.map((s) => s.id).sort()).toEqual([
+        "session-mid",
+        "session-old",
+      ]);
+
+      const betweenResults = listSessions(db, {
+        after: "2026-01-10",
+        before: "2026-01-20",
+      });
+      expect(betweenResults).toHaveLength(1);
+      expect(betweenResults[0].id).toBe("session-mid");
+    });
+
+    test("listSessions respects limit and offset", () => {
+      db = openDatabase(dbPath);
+
+      for (let i = 0; i < 5; i++) {
+        const session = makeSession({
+          id: `session-${i}`,
+          modified_at: `2026-01-${15 + i}T10:00:00Z`,
+        });
+        insertSession(db, session, []);
+      }
+
+      const page1 = listSessions(db, { limit: 2 });
+      expect(page1).toHaveLength(2);
+      expect(page1[0].id).toBe("session-4");
+      expect(page1[1].id).toBe("session-3");
+
+      const page2 = listSessions(db, { limit: 2, offset: 2 });
+      expect(page2).toHaveLength(2);
+      expect(page2[0].id).toBe("session-2");
+      expect(page2[1].id).toBe("session-1");
+
+      const page3 = listSessions(db, { limit: 2, offset: 4 });
+      expect(page3).toHaveLength(1);
+      expect(page3[0].id).toBe("session-0");
+    });
+
+    test("listSessions clamps limit to [1, 500]", () => {
+      db = openDatabase(dbPath);
+
+      for (let i = 0; i < 5; i++) {
+        const session = makeSession({
+          id: `session-${i}`,
+          modified_at: `2026-01-${15 + i}T10:00:00Z`,
+        });
+        insertSession(db, session, []);
+      }
+
+      // Negative limit should be clamped to 1
+      const negativeLimit = listSessions(db, { limit: -1 });
+      expect(negativeLimit).toHaveLength(1);
+
+      // Very high limit should be clamped to 500
+      const hugeLimit = listSessions(db, { limit: 9999 });
+      expect(hugeLimit).toHaveLength(5); // Only 5 sessions exist
+
+      // Negative offset should be clamped to 0
+      const negativeOffset = listSessions(db, { offset: -5 });
+      expect(negativeOffset).toHaveLength(5);
+      expect(negativeOffset[0].id).toBe("session-4");
+    });
+
+    test("listSessions escapes wildcards in cwd", () => {
+      db = openDatabase(dbPath);
+
+      const sessionUnderscore = makeSession({
+        id: "session-underscore",
+        cwd: "/home/user/project_v2",
+      });
+      const sessionX = makeSession({
+        id: "session-x",
+        cwd: "/home/user/projectXv2",
+      });
+
+      insertSession(db, sessionUnderscore, []);
+      insertSession(db, sessionX, []);
+
+      const results = listSessions(db, { cwd: "/home/user/project_v2" });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].id).toBe("session-underscore");
+    });
+
+    test("getSession returns session by id", () => {
+      db = openDatabase(dbPath);
+
+      const session = makeSession({
+        id: "test-session",
+        name: "Test Session",
+        cwd: "/custom/path",
+      });
+
+      insertSession(db, session, []);
+
+      const result = getSession(db, "test-session");
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe("test-session");
+      expect(result?.name).toBe("Test Session");
+      expect(result?.cwd).toBe("/custom/path");
+    });
+
+    test("getSession returns null for unknown id", () => {
+      db = openDatabase(dbPath);
+
+      const result = getSession(db, "nonexistent");
+
+      expect(result).toBeNull();
+    });
   });
 
   test("search with '*' filters by toolName", () => {

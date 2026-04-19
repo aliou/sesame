@@ -7,6 +7,7 @@ export { indexSessions } from "./indexer/index";
 export { PiParser } from "./parsers/pi";
 export type {
   Database,
+  ListSessionsOptions,
   SearchOptions,
   SearchResult,
   StoredChunk,
@@ -16,9 +17,11 @@ export type {
 export {
   deleteSession,
   dropAll,
+  getSession,
   getSessionMtime,
   getStats,
   insertSession,
+  listSessions,
   openDatabase,
   search,
   setMetadata,
