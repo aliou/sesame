@@ -1,6 +1,8 @@
 # Library usage
 
-Sesame exports parser, indexer, storage, config, and date helpers from `packages/sesame/index.ts`.
+Sesame exports parser, indexer, storage, config, locking, and date helpers from `packages/sesame/index.ts`.
+
+Search ranking uses SQLite FTS5 BM25.
 
 ## Install (as dependency)
 
@@ -12,31 +14,44 @@ pnpm add @aliou/sesame
 
 From `@aliou/sesame`:
 
-- DB: `openDatabase`, `search`, `insertSession`, `deleteSession`, `dropAll`, `getStats`, `getSessionMtime`
-- Indexer/parser: `indexSessions` (Pi-only) and `PiParser`
-- Config: `loadConfig`, `expandPath`, `getXDGPaths`
-- Helpers/types: `parseRelativeDate` and core TS types
+- DB: `openDatabase`, `search`, `insertSession`, `deleteSession`, `dropAll`, `getSession`, `getSessionMtime`, `getStats`, `listSessions`, `setMetadata`
+- Indexer/parser: `indexSessions`, `PiParser`
+- Config/helpers: `loadConfig`, `expandPath`, `getXDGPaths`, `parseRelativeDate`, `acquireIndexLock`
+- Types: `Database`, `SearchOptions`, `SearchResult`, `ListSessionsOptions`, `StoredSession`, `StoredChunk`, `ParsedSession`, `ToolCall`, `Turn`, `IndexResult`, `IndexLockHandle`, `SesameConfig`
 
-
-## Minimal example
+## Minimal search example
 
 ```ts
 import { join } from "node:path";
-import { indexSessions, openDatabase, search } from "@aliou/sesame";
-import { getXDGPaths } from "@aliou/sesame";
+import { getXDGPaths, openDatabase, search } from "@aliou/sesame";
 
 const paths = getXDGPaths();
 const db = openDatabase(join(paths.data, "index.sqlite"));
 
 try {
-  await indexSessions(db, "/Users/me/.pi/agent/sessions");
-
   const results = search(db, "release workflow", {
     limit: 5,
     cwd: "/Users/me/code",
   });
 
   console.log(results);
+} finally {
+  db.close();
+}
+```
+
+## Indexing example
+
+```ts
+import { join } from "node:path";
+import { getXDGPaths, indexSessions, openDatabase } from "@aliou/sesame";
+
+const paths = getXDGPaths();
+const db = openDatabase(join(paths.data, "index.sqlite"));
+
+try {
+  const result = await indexSessions(db, "/Users/me/.pi/agent/sessions");
+  console.log(result);
 } finally {
   db.close();
 }
@@ -50,9 +65,9 @@ try {
 - `toolsOnly`, `toolName`
 - `pathFilter`
 - `exclude`
-- `status` (`"success" | "error"`)
+- `status` (`"success" | "error"`), when combined with `toolsOnly` or `toolName`
 
-Note: CLI currently does not expose every storage option (example: `status`).
+`json` is present on `SearchOptions` for CLI output handling, but storage results are always returned as JavaScript objects.
 
 ## Runtime notes
 

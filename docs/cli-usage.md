@@ -11,7 +11,7 @@ sesame watch
 sesame watch --interval <seconds>
 ```
 
-All commands operate on the same SQLite index database (`index.sqlite`).
+All commands operate on the same local SQLite index database (`index.sqlite`) under Sesame's XDG data directory.
 
 ## `sesame index`
 
@@ -48,6 +48,8 @@ Options:
 - `--path <file>`: restrict to tool_call chunks mentioning a path
 - `--exclude <id>`: exclude a session id (repeatable)
 - `--json`: JSON output
+
+CLI scores are display-normalized. Ranking still comes from SQLite FTS5 BM25.
 
 Date formats:
 - relative: `7d`, `2w`, `1m`

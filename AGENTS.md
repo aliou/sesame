@@ -7,8 +7,8 @@
 - Lint: `pnpm run lint`
 - Format/fix: `pnpm run format`
 - Run all tests: `pnpm test`
-- Run one file: `pnpm test --filter @aliou/sesame -- packages/sesame/utils/date.test.ts`
-- Run one test: `pnpm test --filter @aliou/sesame -- packages/sesame/utils/date.test.ts -t "Invalid input throws"`
+- Run one file: `pnpm --filter @aliou/sesame test utils/date.test.ts`
+- Run one test: `pnpm --filter @aliou/sesame test utils/date.test.ts -t "Invalid input throws"`
 - Git hooks (Husky): pre-push runs `check:lockfile`, `lint`, `typecheck`.
 ## Architecture / codebase
 This is a pnpm monorepo. Packages live under `packages/`:

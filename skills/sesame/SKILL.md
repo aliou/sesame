@@ -1,6 +1,6 @@
 ---
 name: sesame
-description: Search past coding sessions with Sesame BM25 search. Use for multi-word topic queries, tool-call searches, or listing recent sessions when find_sessions is too strict.
+description: Search past coding sessions with Sesame local BM25 search. Use for ranked multi-word queries, tool-call searches, or listing recent sessions when exact lookup is too strict.
 ---
 
 # Sesame - Session Search
@@ -54,7 +54,7 @@ sesame watch --interval 30
 ## Practical workflow
 
 1. Run `sesame search "query"`.
-2. If results are empty or stale, run `sesame index`.
+2. If results are empty or stale, run `sesame index` or keep `sesame watch` running.
 3. Narrow using `--cwd`, `--after`, `--before`, `--tools`, `--tool`, or `--path`.
 4. Use `--exclude` to page through additional results across repeated searches.
 5. Use `--json` when another tool/agent needs structured output.
