@@ -18,7 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       published: ${{ steps.changesets.outputs.published }}
-      version: ${{ steps.version.outputs.version }}
+      cli_release: ${{ steps.versions.outputs.cli_release }}
+      cli_version: ${{ steps.versions.outputs.cli_version }}
+      cli_tag: ${{ steps.versions.outputs.cli_tag }}
     permissions:
       contents: write
       packages: write
@@ -61,8 +63,13 @@ jobs:
           const release = JSON.parse(fs.readFileSync('release.json', 'utf8'));
           const releases = release.releases?.filter(r => r.type !== 'none') || [];
 
-          let title = 'Version Packages';
-          let commit = 'Version Packages';
+          const packages = ['packages/sesame/package.json', 'packages/cli/package.json']
+            .map(path => JSON.parse(fs.readFileSync(path, 'utf8')))
+            .filter(pkg => pkg.name && pkg.version);
+
+          const fallbackSummary = packages.map(pkg => pkg.name + '@' + pkg.version).join(', ');
+          let title = 'Updating ' + fallbackSummary;
+          let commit = fallbackSummary;
           if (releases.length === 1) {
             const { name, newVersion } = releases[0];
             title = 'Updating ' + name + ' to version ' + newVersion;
@@ -85,35 +92,42 @@ jobs:
         with:
           version: pnpm changeset version
           publish: pnpm changeset publish
-          title: ${{ steps.release-info.outputs.title || 'Version Packages' }}
-          commit: ${{ steps.release-info.outputs.commit || 'Version Packages' }}
+          title: ${{ steps.release-info.outputs.title || 'Updating @aliou/sesame and @aliou/sesame-cli' }}
+          commit: ${{ steps.release-info.outputs.commit || '@aliou/sesame, @aliou/sesame-cli' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
 
-      - name: Get published version
-        if: steps.changesets.outputs.published == 'true'
-        id: version
+      - name: Get package versions
+        id: versions
         run: |
-          VERSION=$(node -p "require('./packages/sesame/package.json').version")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          CLI_VERSION=$(node -p "require('./packages/cli/package.json').version")
+          CLI_TAG="@aliou/sesame-cli@$CLI_VERSION"
+          echo "cli_version=$CLI_VERSION" >> $GITHUB_OUTPUT
+          echo "cli_tag=$CLI_TAG" >> $GITHUB_OUTPUT
 
-      - name: Create GitHub Release (tag only)
-        if: steps.changesets.outputs.published == 'true'
+          if git diff-tree --no-commit-id --name-only -r HEAD | grep -q '^packages/cli/package.json$'; then
+            echo "cli_release=true" >> $GITHUB_OUTPUT
+          else
+            echo "cli_release=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create CLI GitHub Release
+        if: steps.versions.outputs.cli_release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: v${{ steps.version.outputs.version }}
+          TAG: ${{ steps.versions.outputs.cli_tag }}
         run: |
           if ! gh release view "$TAG" &>/dev/null; then
             gh release create "$TAG" \
               --title "$TAG" \
-              --generate-notes
+              --notes "Release $TAG"
           fi
 
   build-binary:
     name: Build ${{ matrix.artifact }}
     needs: publish
-    if: needs.publish.outputs.published == 'true'
+    if: needs.publish.outputs.cli_release == 'true'
     strategy:
       matrix:
         include:
@@ -164,5 +178,5 @@ jobs:
       - name: Upload to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: v${{ needs.publish.outputs.version }}
+          TAG: ${{ needs.publish.outputs.cli_tag }}
         run: gh release upload "$TAG" packages/cli/dist/${{ matrix.artifact }} --clobber
