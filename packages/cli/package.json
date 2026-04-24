@@ -2,7 +2,7 @@
   "name": "@aliou/sesame-cli",
   "version": "0.8.0",
   "private": true,
-  "description": "CLI for Sesame semantic search",
+  "description": "CLI for Sesame BM25 search",
   "type": "module",
   "bin": {
     "sesame": "./bin/sesame"

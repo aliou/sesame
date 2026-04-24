@@ -1,7 +1,7 @@
 {
   "name": "@aliou/sesame",
   "version": "0.8.0",
-  "description": "Semantic search for coding agent sessions",
+  "description": "BM25 search for coding agent sessions",
   "type": "module",
   "exports": {
     ".": {
@@ -19,7 +19,7 @@
     "prepublishOnly": "pnpm run build"
   },
   "keywords": [
-    "semantic-search",
+    "bm25-search",
     "coding-agent",
     "pi",
     "sqlite"

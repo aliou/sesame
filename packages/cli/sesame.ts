@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Sesame - Semantic search for coding agent sessions
+ * Sesame - BM25 search for coding agent sessions
  * Main CLI entry point
  */
 
@@ -41,6 +41,8 @@ Search options:
   --limit <n>        Max results (default: 10)
   --tools            Search only tool call chunks
   --tool <name>      Search specific tool type
+  --path <file>      Find sessions that touched a file
+  --exclude <id>     Exclude session ID (repeatable)
   --json             Output as JSON
 `);
 }

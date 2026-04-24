@@ -1,6 +1,6 @@
 {
   "private": true,
-  "description": "Semantic search for coding agent sessions",
+  "description": "BM25 search for coding agent sessions",
   "type": "module",
   "pi": {
     "skills": [
