@@ -2,87 +2,135 @@
 
 ## Overview
 
-Indexing converts session files into normalized records in SQLite:
+Indexing converts Pi JSONL session files into normalized SQLite records:
 
-- `sessions` table: metadata + mtime
-- `chunks` table: searchable units (`message` and `tool_call`)
-- `chunks_fts` table: FTS5 index on chunk content
+- `sessions`: one row per session, with metadata, source path, cwd, timestamps, mtime, and parent session id
+- `chunks`: searchable units derived from messages and assistant tool calls
+- `chunks_fts`: external-content FTS5 table over `chunks.content`
+- `metadata`: key/value state such as `last_sync_at`
+- `schema_migrations`: applied migration tracking
 
 Flow:
-1. Load config Pi session paths (`~/.config/sesame/config.jsonc`, key: `piSessionPaths`)
-2. Scan Pi session directories
-3. Parse session files (Pi JSONL parser)
-4. Build chunks
-5. Upsert via delete + insert per changed session
+
+1. Load config from `<config-dir>/config.jsonc`, key `piSessionPaths`.
+2. Expand `~` in configured paths.
+3. Scan each Pi session root.
+4. Parse candidate `.jsonl` files with `PiParser`.
+5. Build `message` and `tool_call` chunks.
+6. Replace changed sessions with delete + insert in one transaction.
+7. Let SQL triggers keep `chunks_fts` synchronized.
+8. Update `metadata.last_sync_at` when the run has changes and zero errors.
 
 ```mermaid
 flowchart TD
-  A[sesame index] --> B[load config]
-  B --> C[scan Pi session directories]
+  A[sesame index/watch] --> B[load config]
+  B --> C[scan Pi session roots]
   C --> D{mtime changed?}
   D -- no --> E[skip file]
   D -- yes --> F[parse JSONL with PiParser]
   F --> G[build message/tool_call chunks]
-  G --> H[replace session rows (delete+insert)]
+  G --> H[delete old session rows if present]
   H --> I[insert session + chunks]
   I --> J[FTS triggers sync chunks_fts]
-  J --> K[update last_sync_at when run has changes and no errors]
+  J --> K[update last_sync_at if no errors and changed]
 ```
+
+## File discovery
+
+`packages/sesame/indexer/index.ts` scans each configured root and recurses exactly one level into child directories. This matches Pi's current layout:
+
+```text
+~/.pi/agent/sessions/<encoded-cwd>/<session-id>.jsonl
+```
+
+Files are considered only if `PiParser.canParse()` accepts them. That requires:
+
+- `.jsonl` extension
+- first line parses as JSON
+- first line has `type: "session"`
+
+Unreadable subdirectories and unparseable files are skipped. Per-file parse/index failures are logged and counted as errors without aborting the whole run.
 
 ## Incremental strategy
 
-`packages/sesame/indexer/index.ts` uses file mtime:
+Sesame uses file mtime for incremental indexing:
 
-- reads file first line for session id
-- compares current mtime vs stored `sessions.file_mtime`
-- unchanged => skip
-- changed/new => parse and rewrite that session
+- reads the first line to get the session id cheaply
+- compares current mtime with `sessions.file_mtime`
+- unchanged files are skipped
+- new or changed files are fully parsed
+- changed sessions are deleted first, then inserted with fresh chunks
 
-This keeps index fast for large session directories.
+This keeps indexing fast for large session directories while keeping FTS state consistent through delete triggers.
 
 ## Parsing (`PiParser`)
 
 `packages/sesame/parsers/pi.ts` extracts:
 
-- session header (`id`, `cwd`, `timestamp`)
-- optional session name (`session_info`)
-- user/assistant text messages
-- assistant tool calls
-- `toolResult` messages (`toolName`, `isError` if present)
-- `bashExecution` messages
-- compaction summaries
+- session header: `id`, `cwd`, `timestamp`
+- parent session id from `parentSession`, by extracting the UUID from the referenced path
+- optional session name from `session_info.name`
+- user text messages
+- assistant text messages
+- assistant `toolCall` blocks as structured `ToolCall` objects
+- `toolResult` messages as system turns, including `toolName` and `isError`
+- `bashExecution` messages as system turns containing `$ <command>` plus output
+- `custom_message` entries as searchable system turns prefixed with `[customType]`
+- `compaction` summaries
+- `branch_summary` summaries
 
-Ignored lines:
-- model/thinking level metadata lines
+Skipped entries:
+
+- `model_change`
+- `thinking_level_change`
+- `custom`
+- `label`
+- image and thinking content blocks inside messages, because only text blocks are indexed today
+
+Malformed JSONL lines are warned and skipped; parsing continues for the rest of the file.
 
 ## Chunking
 
 ### Message chunks
 
-One chunk per non-empty turn text:
+One chunk is created for each turn with non-empty `textContent`:
 
 - `kind = "message"`
 - `role = user|assistant|system`
 - `content = turn.textContent`
-- `is_error` set for parsed tool result turns when available
+- `tool_name` is set for tool-result turns
+- `is_error` is set for tool-result turns when available
+- `entry_id`, `parent_entry_id`, `timestamp`, and `source_type` preserve Pi's tree metadata
 
 ### Tool-call chunks
 
-One chunk per assistant tool call:
+One chunk is created for each assistant tool call:
 
 - `kind = "tool_call"`
-- `tool_name = tool call name`
-- `content` formatted by `packages/sesame/indexer/format-tool-call.ts`
+- `tool_name = tc.name`
+- `role = null`
+- `content` is generated by `packages/sesame/indexer/format-tool-call.ts`
+- tree metadata is inherited from the assistant turn that made the call
 
-Formatter includes tool-specific fields (path/content/command/result/etc.) to make file and command searches work.
+Formatter behavior:
 
-## Database sync
+- write/create tools: tool name, path, content, optional result
+- edit tools: tool name, path, old text, new text, optional result
+- bash/shell/run_command: tool name, command, optional output
+- read tools: tool name, path, optional content
+- generic tools: tool name, serialized args, optional result
 
-FTS table is external-content (`content='chunks'`) and kept in sync through SQL triggers:
+Pi assistant tool-call chunks usually do not have results attached today; tool results are indexed separately as message chunks.
 
-- insert trigger
-- update trigger
-- delete trigger
+## Search behavior
+
+Normal queries are tokenized by whitespace, each token is quoted, and then SQLite FTS5 matches against `chunks_fts`. This avoids accidental FTS operator syntax from punctuation in user queries.
+
+Search then joins matching chunks to sessions, applies filters, groups by session, keeps the best-scoring chunk per session, sorts by BM25 score ascending, and applies `limit`.
+
+Special query `"*"` bypasses FTS and lists sessions by `modified_at DESC`. It still honors session filters, exclude filters, and tool filters where applicable.
+
+## Database schema
 
 ```mermaid
 erDiagram
@@ -91,11 +139,15 @@ erDiagram
 
   sessions {
     text id PK
+    text source
     text path
     text cwd
+    text name
     text created_at
     text modified_at
+    int message_count
     int file_mtime
+    text parent_session_id
   }
 
   chunks {
@@ -107,6 +159,10 @@ erDiagram
     int seq
     text content
     int is_error
+    text entry_id
+    text parent_entry_id
+    text timestamp
+    text source_type
   }
 
   chunks_fts {
@@ -115,21 +171,39 @@ erDiagram
   }
 ```
 
-Also present (not shown above):
-- `metadata` for values like `last_sync_at`
-- `schema_migrations` for migration tracking
+Indexes currently include:
+
+- `idx_chunks_session`
+- `idx_chunks_kind`
+- `idx_chunks_tool`
+- `idx_sessions_parent`
+- `idx_chunks_entry`
+
+## Database sync
+
+`chunks_fts` uses `content='chunks'` and is kept in sync through triggers:
+
+- `chunks_ai` after insert
+- `chunks_ad` after delete
+- `chunks_au` after update
+
+`openDatabase()` enables WAL mode and foreign keys, creates the latest schema if needed, runs pending migrations for existing databases, and ensures post-migration indexes.
 
 ## Full rebuild
 
-`sesame index --full` calls `dropAll()` then re-runs indexing.
+`sesame index --full` calls `dropAll()` before indexing.
 
 `dropAll()`:
-- drops triggers/indexes/tables
-- recreates schema
-- marks migrations applied for fresh schema
+
+- drops FTS triggers
+- drops chunk indexes
+- drops `chunks_fts`, `chunks`, `sessions`, `metadata`, and `schema_migrations`
+- recreates the current schema
+- records all migrations as applied for the fresh schema
 
 ## Metadata
 
-Indexing updates `metadata.last_sync_at` when run has:
-- zero errors
-- at least one added or updated session
+Indexing and watch mode update `metadata.last_sync_at` only when:
+
+- total errors are zero
+- at least one session was added or updated
