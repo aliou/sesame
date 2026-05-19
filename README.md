@@ -13,10 +13,18 @@ Sesame indexes Pi JSONL session files locally and lets you search them with rank
 - supports tool-oriented filters (`--tools`, `--tool`, `--path`)
 - supports filesystem watch mode and interval polling
 
-## Requirements
+## Installation
 
-- Node.js 25 or newer
-- pnpm
+### Homebrew
+
+```bash
+brew tap aliou/toolbox
+brew install sesame
+```
+
+### From source
+
+Requires Node.js 25 or newer and pnpm.
 
 ## Quickstart (repo)
 
