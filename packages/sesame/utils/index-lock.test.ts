@@ -1,31 +1,19 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, expect, test } from "vitest";
+import { fs, vol } from "memfs";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { acquireIndexLock } from "./index-lock";
 
-describe("acquireIndexLock", () => {
-  const dirs: string[] = [];
+vi.mock("node:fs");
 
-  afterEach(() => {
-    for (const dir of dirs) {
-      rmSync(dir, { recursive: true, force: true });
-    }
-    dirs.length = 0;
+describe("acquireIndexLock", () => {
+  beforeEach(() => {
+    vol.reset();
+    fs.mkdirSync("/tmp/sesame-index-lock", { recursive: true });
   });
 
-  function createTempDir(): string {
-    const dir = mkdtempSync(join(tmpdir(), "sesame-index-lock-"));
-    dirs.push(dir);
-    return dir;
-  }
-
   test("creates lock file and releases it", () => {
-    const dir = createTempDir();
+    const lock = acquireIndexLock("/tmp/sesame-index-lock", "watch");
 
-    const lock = acquireIndexLock(dir, "watch");
-
-    const lockFile = JSON.parse(readFileSync(lock.path, "utf8")) as {
+    const lockFile = JSON.parse(fs.readFileSync(lock.path, "utf8")) as {
       pid?: number;
       holder?: string;
       startedAt?: string;
@@ -36,15 +24,12 @@ describe("acquireIndexLock", () => {
 
     lock.release();
 
-    expect(() => readFileSync(lock.path, "utf8")).toThrow();
+    expect(() => fs.readFileSync(lock.path, "utf8")).toThrow();
   });
 
   test("fails when another live holder owns the lock", () => {
-    const dir = createTempDir();
-    const lockPath = join(dir, "index.lock");
-
-    writeFileSync(
-      lockPath,
+    fs.writeFileSync(
+      "/tmp/sesame-index-lock/index.lock",
       JSON.stringify({
         pid: process.pid,
         holder: "watch",
@@ -53,17 +38,14 @@ describe("acquireIndexLock", () => {
       "utf8",
     );
 
-    expect(() => acquireIndexLock(dir, "index")).toThrow(
+    expect(() => acquireIndexLock("/tmp/sesame-index-lock", "index")).toThrow(
       "Index already running",
     );
   });
 
   test("removes stale lock when recorded pid is dead", () => {
-    const dir = createTempDir();
-    const lockPath = join(dir, "index.lock");
-
-    writeFileSync(
-      lockPath,
+    fs.writeFileSync(
+      "/tmp/sesame-index-lock/index.lock",
       JSON.stringify({
         pid: 999999,
         holder: "watch",
@@ -72,8 +54,8 @@ describe("acquireIndexLock", () => {
       "utf8",
     );
 
-    const lock = acquireIndexLock(dir, "index");
-    const lockFile = JSON.parse(readFileSync(lock.path, "utf8")) as {
+    const lock = acquireIndexLock("/tmp/sesame-index-lock", "index");
+    const lockFile = JSON.parse(fs.readFileSync(lock.path, "utf8")) as {
       pid?: number;
       holder?: string;
     };

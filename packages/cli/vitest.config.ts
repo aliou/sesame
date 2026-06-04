@@ -10,7 +10,9 @@ export default defineConfig({
     },
   },
   test: {
+    environment: "node",
     include: ["**/*.test.ts"],
     exclude: ["test/**", "node_modules/**"],
+    mockReset: true,
   },
 });

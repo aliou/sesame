@@ -1,88 +1,66 @@
-import { unlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, expect, test } from "vitest";
+import { vol } from "memfs";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { readFirstLine } from "./io";
 
-describe("readFirstLine", () => {
-  let tempFiles: string[] = [];
+vi.mock("node:fs");
 
-  afterEach(() => {
-    for (const f of tempFiles) {
-      try {
-        unlinkSync(f);
-      } catch {
-        void 0;
-      }
-    }
-    tempFiles = [];
+describe("readFirstLine", () => {
+  beforeEach(() => {
+    vol.reset();
   });
 
-  function tempPath(): string {
-    const p = join(
-      tmpdir(),
-      `sesame-io-test-${Date.now()}-${Math.random()}.txt`,
-    );
-    tempFiles.push(p);
-    return p;
-  }
-
   test("reads the first line from a single-line file", () => {
-    const path = tempPath();
-    writeFileSync(path, "hello world");
+    vol.fromJSON({ "/tmp/session.txt": "hello world" });
 
-    expect(readFirstLine(path)).toBe("hello world");
+    expect(readFirstLine("/tmp/session.txt")).toBe("hello world");
   });
 
   test("reads only the first line from a multi-line file", () => {
-    const path = tempPath();
-    writeFileSync(path, "first line\nsecond line\nthird line");
+    vol.fromJSON({
+      "/tmp/session.txt": "first line\nsecond line\nthird line",
+    });
 
-    expect(readFirstLine(path)).toBe("first line");
+    expect(readFirstLine("/tmp/session.txt")).toBe("first line");
   });
 
   test("handles files whose first line is shorter than buffer size", () => {
-    const path = tempPath();
-    writeFileSync(path, '{"type":"session","id":"abc123"}\nmore data');
+    vol.fromJSON({
+      "/tmp/session.jsonl": '{"type":"session","id":"abc123"}\nmore data',
+    });
 
-    expect(readFirstLine(path)).toBe('{"type":"session","id":"abc123"}');
+    expect(readFirstLine("/tmp/session.jsonl")).toBe(
+      '{"type":"session","id":"abc123"}',
+    );
   });
 
-  test("handles large files efficiently (only reads first 4KB)", () => {
-    const path = tempPath();
-    // First line is short, rest of file is large
+  test("handles large files efficiently", () => {
     const firstLine = '{"type":"session","id":"large-test"}';
-    // Pad to over 1MB
-    const body = `\n${"x".repeat(1024 * 1024)}`;
-    writeFileSync(path, firstLine + body);
+    vol.fromJSON({
+      "/tmp/large-session.jsonl": `${firstLine}\n${"x".repeat(1024 * 1024)}`,
+    });
 
-    // readFirstLine should return only the first line without reading the whole file
-    expect(readFirstLine(path)).toBe(firstLine);
+    expect(readFirstLine("/tmp/large-session.jsonl")).toBe(firstLine);
   });
 
-  test("returns null when first line exceeds 4KB (no newline found)", () => {
-    const path = tempPath();
-    // Single line longer than 4KB, no newline
-    writeFileSync(path, "x".repeat(5000));
+  test("returns null when first line exceeds 4KB", () => {
+    vol.fromJSON({ "/tmp/long-line.txt": "x".repeat(5000) });
 
-    expect(readFirstLine(path)).toBeNull();
+    expect(readFirstLine("/tmp/long-line.txt")).toBeNull();
   });
 
   test("returns null for empty files", () => {
-    const path = tempPath();
-    writeFileSync(path, "");
+    vol.fromJSON({ "/tmp/empty.txt": "" });
 
-    expect(readFirstLine(path)).toBeNull();
+    expect(readFirstLine("/tmp/empty.txt")).toBeNull();
   });
 
   test("returns null for nonexistent files", () => {
-    expect(readFirstLine("/nonexistent/path/file.txt")).toBeNull();
+    expect(readFirstLine("/tmp/missing.txt")).toBeNull();
   });
 
   test("handles a file with only a newline", () => {
-    const path = tempPath();
-    writeFileSync(path, "\nsecond line");
+    vol.fromJSON({ "/tmp/newline.txt": "\nsecond line" });
 
-    expect(readFirstLine(path)).toBe("");
+    expect(readFirstLine("/tmp/newline.txt")).toBe("");
   });
 });

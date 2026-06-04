@@ -1,144 +1,152 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { fs, vol } from "memfs";
+import {
+  afterEach,
+  assert,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from "vitest";
 import { type Database, getSession, openDatabase } from "../storage/db";
 import { createSessionBuilder } from "../test-helpers/session-factory";
 import { indexFile, indexSessions } from "./index";
 
+vi.mock("node:fs");
+vi.mock("node:fs/promises");
+
 describe("indexer", () => {
   let db: Database;
-  let testDir: string;
-  let cleanupPaths: string[];
 
-  function setup(): void {
+  beforeEach(() => {
+    vol.reset();
+    fs.mkdirSync("/tmp/sesame-sessions", { recursive: true });
     db = openDatabase(":memory:");
-    testDir = join(tmpdir(), `sesame-test-${Date.now()}-${Math.random()}`);
-    mkdirSync(testDir, { recursive: true });
-    cleanupPaths = [testDir];
+  });
+
+  afterEach(() => {
+    db.close();
+    vol.reset();
+  });
+
+  function addFile(path: string, content: string): string {
+    fs.writeFileSync(path, content, "utf8");
+    return path;
   }
 
-  function teardown(): void {
-    db.close();
-    for (const p of cleanupPaths) {
-      try {
-        rmSync(p, { recursive: true, force: true });
-      } catch {
-        void 0;
-      }
-    }
-    cleanupPaths = [];
+  function touch(path: string, date = new Date(Date.now() + 1000)): void {
+    fs.utimesSync(path, date, date);
   }
 
   describe("indexSessions", () => {
-    beforeEach(setup);
-    afterEach(teardown);
-
     test("indexes a valid session file", async () => {
-      const content = createSessionBuilder()
-        .withHeader({ id: "sess-1", cwd: "/project" })
-        .withUserMessage("Hello")
-        .build();
-      writeFileSync(join(testDir, "sess-1.jsonl"), content);
+      addFile(
+        "/tmp/sesame-sessions/sess-1.jsonl",
+        createSessionBuilder()
+          .withHeader({ id: "sess-1", cwd: "/project" })
+          .withUserMessage("Hello")
+          .build(),
+      );
 
-      const result = await indexSessions(db, testDir);
+      const result = await indexSessions(db, "/tmp/sesame-sessions");
 
       expect(result.added).toBe(1);
       expect(result.errors).toBe(0);
 
       const session = getSession(db, "sess-1");
-      expect(session).not.toBeNull();
-      expect(session?.id).toBe("sess-1");
-      expect(session?.cwd).toBe("/project");
+      assert(session, "session should exist");
+      expect(session.id).toBe("sess-1");
+      expect(session.cwd).toBe("/project");
     });
 
     test("skips non-.jsonl files", async () => {
-      writeFileSync(join(testDir, "readme.txt"), "not a session");
-      writeFileSync(join(testDir, "data.json"), '{"type":"session"}');
+      addFile("/tmp/sesame-sessions/readme.txt", "not a session");
+      addFile("/tmp/sesame-sessions/data.json", '{"type":"session"}');
 
-      const result = await indexSessions(db, testDir);
+      const result = await indexSessions(db, "/tmp/sesame-sessions");
 
       expect(result.added).toBe(0);
       expect(result.skipped).toBe(0);
     });
 
     test("skips .jsonl files without session header", async () => {
-      writeFileSync(
-        join(testDir, "other.jsonl"),
+      addFile(
+        "/tmp/sesame-sessions/other.jsonl",
         JSON.stringify({ type: "other", data: "test" }),
       );
 
-      const result = await indexSessions(db, testDir);
+      const result = await indexSessions(db, "/tmp/sesame-sessions");
 
       expect(result.added).toBe(0);
     });
 
-    test("skips unchanged files on second index (mtime check)", async () => {
-      const content = createSessionBuilder()
-        .withHeader({ id: "sess-2" })
-        .withUserMessage("Hello")
-        .build();
-      writeFileSync(join(testDir, "sess-2.jsonl"), content);
+    test("skips unchanged files on second index", async () => {
+      addFile(
+        "/tmp/sesame-sessions/sess-2.jsonl",
+        createSessionBuilder()
+          .withHeader({ id: "sess-2" })
+          .withUserMessage("Hello")
+          .build(),
+      );
 
-      const first = await indexSessions(db, testDir);
+      const first = await indexSessions(db, "/tmp/sesame-sessions");
       expect(first.added).toBe(1);
 
-      const second = await indexSessions(db, testDir);
+      const second = await indexSessions(db, "/tmp/sesame-sessions");
       expect(second.skipped).toBe(1);
       expect(second.added).toBe(0);
     });
 
     test("updates a session when file mtime changes", async () => {
-      const content = createSessionBuilder()
-        .withHeader({ id: "sess-3" })
-        .withUserMessage("Hello")
-        .build();
-      const filePath = join(testDir, "sess-3.jsonl");
-      writeFileSync(filePath, content);
+      const filePath = addFile(
+        "/tmp/sesame-sessions/sess-3.jsonl",
+        createSessionBuilder()
+          .withHeader({ id: "sess-3" })
+          .withUserMessage("Hello")
+          .build(),
+      );
 
-      const first = await indexSessions(db, testDir);
+      const first = await indexSessions(db, "/tmp/sesame-sessions");
       expect(first.added).toBe(1);
 
-      // Wait briefly so mtime differs
-      await new Promise((r) => setTimeout(r, 50));
+      addFile(
+        filePath,
+        createSessionBuilder()
+          .withHeader({ id: "sess-3" })
+          .withUserMessage("Hello")
+          .withAssistantMessage("Updated response")
+          .build(),
+      );
+      touch(filePath);
 
-      const updatedContent = createSessionBuilder()
-        .withHeader({ id: "sess-3" })
-        .withUserMessage("Hello")
-        .withAssistantMessage("Updated response")
-        .build();
-      writeFileSync(filePath, updatedContent);
-
-      const second = await indexSessions(db, testDir);
+      const second = await indexSessions(db, "/tmp/sesame-sessions");
       expect(second.updated).toBe(1);
     });
 
     test("scans one level of subdirectories", async () => {
-      const subdir = join(testDir, "encoded-cwd");
-      mkdirSync(subdir, { recursive: true });
+      fs.mkdirSync("/tmp/sesame-sessions/encoded-cwd", { recursive: true });
+      addFile(
+        "/tmp/sesame-sessions/encoded-cwd/sess-4.jsonl",
+        createSessionBuilder()
+          .withHeader({ id: "sess-4" })
+          .withUserMessage("In subdir")
+          .build(),
+      );
 
-      const content = createSessionBuilder()
-        .withHeader({ id: "sess-4" })
-        .withUserMessage("In subdir")
-        .build();
-      writeFileSync(join(subdir, "sess-4.jsonl"), content);
-
-      const result = await indexSessions(db, testDir);
+      const result = await indexSessions(db, "/tmp/sesame-sessions");
 
       expect(result.added).toBe(1);
-      const session = getSession(db, "sess-4");
-      expect(session).not.toBeNull();
+      expect(getSession(db, "sess-4")).not.toBeNull();
     });
 
     test("returns errors for unreadable directories", async () => {
-      const result = await indexSessions(db, "/nonexistent/path");
+      const result = await indexSessions(db, "/tmp/missing");
+
       expect(result.added).toBe(0);
       expect(result.errors).toBe(0);
     });
 
-    test("handles large files efficiently (does not read entire file for mtime check)", async () => {
-      // This test verifies the fix: readFirstLine only reads 4KB, not the whole file.
-      // A session file with a 1MB body should not cause O(n) overhead for canParse/mtime.
+    test("handles large files efficiently", async () => {
       const lines = [
         JSON.stringify({
           type: "session",
@@ -147,7 +155,6 @@ describe("indexer", () => {
           timestamp: new Date().toISOString(),
         }),
       ];
-      // Add lots of content lines to make it large
       for (let i = 0; i < 10000; i++) {
         lines.push(
           JSON.stringify({
@@ -159,28 +166,26 @@ describe("indexer", () => {
           }),
         );
       }
-      writeFileSync(join(testDir, "large-sess.jsonl"), lines.join("\n"));
+      addFile("/tmp/sesame-sessions/large-sess.jsonl", lines.join("\n"));
 
-      const result = await indexSessions(db, testDir);
+      const result = await indexSessions(db, "/tmp/sesame-sessions");
+
       expect(result.added).toBe(1);
-
       const session = getSession(db, "large-sess");
-      expect(session).not.toBeNull();
-      expect(session?.message_count).toBeGreaterThan(0);
+      assert(session, "large session should exist");
+      expect(session.message_count).toBeGreaterThan(0);
     });
   });
 
   describe("indexFile", () => {
-    beforeEach(setup);
-    afterEach(teardown);
-
     test("indexes a single valid file", async () => {
-      const content = createSessionBuilder()
-        .withHeader({ id: "single-1", cwd: "/project" })
-        .withUserMessage("Single file test")
-        .build();
-      const filePath = join(testDir, "single-1.jsonl");
-      writeFileSync(filePath, content);
+      const filePath = addFile(
+        "/tmp/sesame-sessions/single-1.jsonl",
+        createSessionBuilder()
+          .withHeader({ id: "single-1", cwd: "/project" })
+          .withUserMessage("Single file test")
+          .build(),
+      );
 
       const result = await indexFile(db, filePath);
 
@@ -188,14 +193,16 @@ describe("indexer", () => {
       expect(result.errors).toBe(0);
 
       const session = getSession(db, "single-1");
-      expect(session).not.toBeNull();
-      expect(session?.id).toBe("single-1");
-      expect(session?.cwd).toBe("/project");
+      assert(session, "session should exist");
+      expect(session.id).toBe("single-1");
+      expect(session.cwd).toBe("/project");
     });
 
     test("skips non-.jsonl file", async () => {
-      const filePath = join(testDir, "readme.txt");
-      writeFileSync(filePath, "not a session");
+      const filePath = addFile(
+        "/tmp/sesame-sessions/readme.txt",
+        "not a session",
+      );
 
       const result = await indexFile(db, filePath);
 
@@ -205,8 +212,10 @@ describe("indexer", () => {
     });
 
     test("skips .jsonl without session header", async () => {
-      const filePath = join(testDir, "other.jsonl");
-      writeFileSync(filePath, JSON.stringify({ type: "other" }));
+      const filePath = addFile(
+        "/tmp/sesame-sessions/other.jsonl",
+        JSON.stringify({ type: "other" }),
+      );
 
       const result = await indexFile(db, filePath);
 
@@ -214,13 +223,14 @@ describe("indexer", () => {
       expect(result.skipped).toBe(0);
     });
 
-    test("skips unchanged file on second call (mtime check)", async () => {
-      const content = createSessionBuilder()
-        .withHeader({ id: "single-2" })
-        .withUserMessage("Hello")
-        .build();
-      const filePath = join(testDir, "single-2.jsonl");
-      writeFileSync(filePath, content);
+    test("skips unchanged file on second call", async () => {
+      const filePath = addFile(
+        "/tmp/sesame-sessions/single-2.jsonl",
+        createSessionBuilder()
+          .withHeader({ id: "single-2" })
+          .withUserMessage("Hello")
+          .build(),
+      );
 
       const first = await indexFile(db, filePath);
       expect(first.added).toBe(1);
@@ -231,50 +241,50 @@ describe("indexer", () => {
     });
 
     test("updates file when mtime changes", async () => {
-      const content = createSessionBuilder()
-        .withHeader({ id: "single-3" })
-        .withUserMessage("Hello")
-        .build();
-      const filePath = join(testDir, "single-3.jsonl");
-      writeFileSync(filePath, content);
+      const filePath = addFile(
+        "/tmp/sesame-sessions/single-3.jsonl",
+        createSessionBuilder()
+          .withHeader({ id: "single-3" })
+          .withUserMessage("Hello")
+          .build(),
+      );
 
       const first = await indexFile(db, filePath);
       expect(first.added).toBe(1);
 
-      await new Promise((r) => setTimeout(r, 50));
-
-      const updated = createSessionBuilder()
-        .withHeader({ id: "single-3" })
-        .withUserMessage("Hello")
-        .withAssistantMessage("New response")
-        .build();
-      writeFileSync(filePath, updated);
+      addFile(
+        filePath,
+        createSessionBuilder()
+          .withHeader({ id: "single-3" })
+          .withUserMessage("Hello")
+          .withAssistantMessage("New response")
+          .build(),
+      );
+      touch(filePath);
 
       const second = await indexFile(db, filePath);
       expect(second.updated).toBe(1);
     });
 
     test("does not scan the entire directory", async () => {
-      // Create a valid file to index
-      const content = createSessionBuilder()
-        .withHeader({ id: "target-sess" })
-        .withUserMessage("Target")
-        .build();
-      const targetPath = join(testDir, "target.jsonl");
-      writeFileSync(targetPath, content);
-
-      // Create another file that should NOT be touched
-      const otherContent = createSessionBuilder()
-        .withHeader({ id: "other-sess" })
-        .withUserMessage("Other")
-        .build();
-      writeFileSync(join(testDir, "other.jsonl"), otherContent);
+      const targetPath = addFile(
+        "/tmp/sesame-sessions/target.jsonl",
+        createSessionBuilder()
+          .withHeader({ id: "target-sess" })
+          .withUserMessage("Target")
+          .build(),
+      );
+      addFile(
+        "/tmp/sesame-sessions/other.jsonl",
+        createSessionBuilder()
+          .withHeader({ id: "other-sess" })
+          .withUserMessage("Other")
+          .build(),
+      );
 
       const result = await indexFile(db, targetPath);
 
       expect(result.added).toBe(1);
-
-      // Only the target file was indexed
       expect(getSession(db, "target-sess")).not.toBeNull();
       expect(getSession(db, "other-sess")).toBeNull();
     });
