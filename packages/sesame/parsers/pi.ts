@@ -5,6 +5,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
 import type { ParsedSession, ToolCall, Turn } from "../types/session";
+import { readFirstLine } from "../utils/io";
 
 interface SessionHeader {
   type: "session";
@@ -231,9 +232,8 @@ export class PiParser {
         return false;
       }
 
-      // Read first line and check for session header
-      const content = await readFile(path, "utf-8");
-      const firstLine = content.split("\n")[0];
+      // Read only the first line (not the entire file)
+      const firstLine = readFirstLine(path);
       if (!firstLine) {
         return false;
       }

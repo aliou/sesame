@@ -54,6 +54,30 @@ describe("PiParser", () => {
       const result = await parser.canParse(path);
       expect(result).toBe(false);
     });
+
+    test("returns true for large .jsonl files", async () => {
+      // Regression test: before the fix, canParse read the entire file just
+      // to check the header (O(n) I/O). Now it only reads the first ~4KB.
+      const header = JSON.stringify({
+        type: "session",
+        version: 3,
+        id: "big-session",
+        timestamp: new Date().toISOString(),
+      });
+      const lines = [header];
+      for (let i = 0; i < 5000; i++) {
+        lines.push(
+          JSON.stringify({
+            type: "message",
+            message: { role: "user", content: `${"x".repeat(100)}` },
+          }),
+        );
+      }
+      const path = await createTempFile(lines.join("\n"));
+
+      const result = await parser.canParse(path);
+      expect(result).toBe(true);
+    });
   });
 
   describe("parse", () => {

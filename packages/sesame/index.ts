@@ -3,7 +3,7 @@
  */
 
 export type { IndexResult } from "./indexer/index";
-export { indexSessions } from "./indexer/index";
+export { indexFile, indexSessions } from "./indexer/index";
 export { PiParser } from "./parsers/pi";
 export type {
   Database,

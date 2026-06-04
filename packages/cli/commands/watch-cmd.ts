@@ -10,6 +10,7 @@ import {
   expandPath,
   getXDGPaths,
   type IndexLockHandle,
+  indexFile,
   indexSessions,
   loadConfig,
   openDatabase,
@@ -152,20 +153,43 @@ export default async function watchCommand(args: string[]): Promise<void> {
                 filename || "unknown",
               );
 
-              // Debounce: clear existing timer and set new one
-              const existingTimer = state.debounceTimers.get(expandedPath);
-              if (existingTimer) {
-                clearTimeout(existingTimer);
-              }
+              if (filename?.endsWith(".jsonl")) {
+                // Targeted indexing: only re-index the changed file
+                const fullPath = join(expandedPath, filename);
 
-              const timer = setTimeout(() => {
-                state.debounceTimers.delete(expandedPath);
-                if (!state.isShuttingDown) {
-                  reindexQueue.enqueue([source], `fs:${eventType}`);
+                const existingTimer = state.debounceTimers.get(fullPath);
+                if (existingTimer) {
+                  clearTimeout(existingTimer);
                 }
-              }, 500);
 
-              state.debounceTimers.set(expandedPath, timer);
+                const timer = setTimeout(() => {
+                  state.debounceTimers.delete(fullPath);
+                  if (!state.isShuttingDown) {
+                    reindexQueue.enqueue(
+                      [{ path: source.path, files: [fullPath] }],
+                      `fs:${eventType}:${filename}`,
+                    );
+                  }
+                }, 500);
+
+                state.debounceTimers.set(fullPath, timer);
+              } else if (!filename) {
+                // No filename info: fall back to full source scan
+                const existingTimer = state.debounceTimers.get(expandedPath);
+                if (existingTimer) {
+                  clearTimeout(existingTimer);
+                }
+
+                const timer = setTimeout(() => {
+                  state.debounceTimers.delete(expandedPath);
+                  if (!state.isShuttingDown) {
+                    reindexQueue.enqueue([source], `fs:${eventType}`);
+                  }
+                }, 500);
+
+                state.debounceTimers.set(expandedPath, timer);
+              }
+              // Non-.jsonl file changes are ignored
             },
           );
 
@@ -226,33 +250,73 @@ async function runIndexing(
     const expandedPath = expandPath(source.path);
 
     try {
-      const result = await indexSessions(state.db, expandedPath);
-      totalAdded += result.added;
-      totalUpdated += result.updated;
-      totalErrors += result.errors;
+      if (source.files && source.files.length > 0) {
+        // Targeted file indexing
+        for (const file of source.files) {
+          try {
+            const result = await indexFile(state.db, file);
+            totalAdded += result.added;
+            totalUpdated += result.updated;
+            totalErrors += result.errors;
 
-      // Log to stderr (human-readable)
-      console.error(
-        "[%s] Indexed %s - added: %d, updated: %d, skipped: %d, errors: %d",
-        timestamp,
-        expandedPath,
-        result.added,
-        result.updated,
-        result.skipped,
-        result.errors,
-      );
+            console.error(
+              "[%s] Indexed %s - added: %d, updated: %d, skipped: %d, errors: %d",
+              timestamp,
+              file,
+              result.added,
+              result.updated,
+              result.skipped,
+              result.errors,
+            );
 
-      // Log to stdout (JSON for machine consumption)
-      console.log(
-        JSON.stringify({
+            console.log(
+              JSON.stringify({
+                timestamp,
+                path: file,
+                added: result.added,
+                updated: result.updated,
+                skipped: result.skipped,
+                errors: result.errors,
+              }),
+            );
+          } catch (error) {
+            totalErrors += 1;
+            console.error(
+              "[%s] Error indexing %s: %s",
+              timestamp,
+              file,
+              error instanceof Error ? error.message : String(error),
+            );
+          }
+        }
+      } else {
+        // Full directory scan
+        const result = await indexSessions(state.db, expandedPath);
+        totalAdded += result.added;
+        totalUpdated += result.updated;
+        totalErrors += result.errors;
+
+        console.error(
+          "[%s] Indexed %s - added: %d, updated: %d, skipped: %d, errors: %d",
           timestamp,
-          path: expandedPath,
-          added: result.added,
-          updated: result.updated,
-          skipped: result.skipped,
-          errors: result.errors,
-        }),
-      );
+          expandedPath,
+          result.added,
+          result.updated,
+          result.skipped,
+          result.errors,
+        );
+
+        console.log(
+          JSON.stringify({
+            timestamp,
+            path: expandedPath,
+            added: result.added,
+            updated: result.updated,
+            skipped: result.skipped,
+            errors: result.errors,
+          }),
+        );
+      }
     } catch (error) {
       totalErrors += 1;
 
@@ -263,7 +327,6 @@ async function runIndexing(
         error instanceof Error ? error.message : String(error),
       );
 
-      // Log error to stdout as JSON
       console.log(
         JSON.stringify({
           timestamp,
