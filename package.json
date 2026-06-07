@@ -18,7 +18,7 @@
     "format": "biome check --write",
     "check:lockfile": "pnpm install --frozen-lockfile --ignore-scripts",
     "prepare": "husky",
-    "version": "pnpm exec changeset version",
+    "version": "node scripts/version.mjs",
     "prepublishOnly": "pnpm -r run build"
   },
   "author": "Aliou Diallo",

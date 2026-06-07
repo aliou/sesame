@@ -90,7 +90,7 @@ jobs:
         id: changesets
         uses: changesets/action@v1
         with:
-          version: pnpm changeset version
+          version: pnpm run version
           publish: pnpm changeset publish
           title: ${{ steps.release-info.outputs.title || 'Updating @aliou/sesame and @aliou/sesame-cli' }}
           commit: ${{ steps.release-info.outputs.commit || '@aliou/sesame, @aliou/sesame-cli' }}
@@ -175,8 +175,66 @@ jobs:
       - name: Rename binary
         run: mv packages/cli/dist/sesame packages/cli/dist/${{ matrix.artifact }}
 
+      - name: Compute binary hash
+        id: hash
+        run: |
+          HASH=$(node -e "const { createHash } = require('node:crypto'); const { readFileSync } = require('node:fs'); console.log('sha256-' + createHash('sha256').update(readFileSync('packages/cli/dist/${{ matrix.artifact }}')).digest('base64'))")
+          echo "hash=${HASH}" >> "$GITHUB_OUTPUT"
+          echo "${HASH}" > ${{ matrix.artifact }}.sha256
+
+      - name: Upload binary hash artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}-hash
+          path: ${{ matrix.artifact }}.sha256
+
       - name: Upload to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.publish.outputs.cli_tag }}
         run: gh release upload "$TAG" packages/cli/dist/${{ matrix.artifact }} --clobber
+
+  update-flake-hashes:
+    name: Update flake hashes
+    needs: [publish, build-binary]
+    if: needs.publish.outputs.cli_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Download binary hash artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: hashes
+          merge-multiple: true
+
+      - name: Update flake hashes
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.publish.outputs.cli_version }}"
+          DARWIN_ARM_HASH=$(cat hashes/sesame-darwin-arm64.sha256)
+          LINUX_ARM_HASH=$(cat hashes/sesame-linux-arm64.sha256)
+          LINUX_X64_HASH=$(cat hashes/sesame-linux-x64.sha256)
+
+          sed -i "s|version = \"[^\"]*\";|version = \"${VERSION}\";|" flake.nix
+          sed -i "s|hash = \"sha256-[^\"]*\"; # darwin|hash = \"${DARWIN_ARM_HASH}\"; # darwin|" flake.nix
+          sed -i "s|hash = \"sha256-[^\"]*\"; # linux-arm64|hash = \"${LINUX_ARM_HASH}\"; # linux-arm64|" flake.nix
+          sed -i "s|hash = \"sha256-[^\"]*\"; # linux-x64|hash = \"${LINUX_X64_HASH}\"; # linux-x64|" flake.nix
+
+      - name: Commit flake hash update
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- flake.nix; then
+            echo "No flake.nix hash changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add flake.nix
+          git commit -m "chore: update binary hashes for @aliou/sesame-cli@${{ needs.publish.outputs.cli_version }}"
+          git push origin main
