@@ -4,23 +4,23 @@ on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
+    branches: [main]
+  workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   publish:
     name: Publish
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     outputs:
-      published: ${{ steps.changesets.outputs.published }}
-      cli_release: ${{ steps.versions.outputs.cli_release }}
-      cli_version: ${{ steps.versions.outputs.cli_version }}
-      cli_tag: ${{ steps.versions.outputs.cli_tag }}
+      staged: ${{ steps.check-publish.outputs.needs_staging }}
+      cli_release: ${{ steps.cli-release.outputs.should_release }}
+      cli_tag: ${{ steps.cli-release.outputs.tag }}
+      cli_version: ${{ steps.cli-release.outputs.version }}
     permissions:
       contents: write
       packages: write
@@ -31,11 +31,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -45,7 +44,7 @@ jobs:
           scope: "@aliou"
           cache: "pnpm"
 
-      - name: Upgrade npm for OIDC support
+      - name: Upgrade npm for stage publish support
         run: npm install -g npm@latest
 
       - name: Install dependencies
@@ -60,14 +59,22 @@ jobs:
           pnpm changeset status --output=release.json 2>/dev/null || echo '{"releases":[]}' > release.json
           node <<NODE
           const fs = require('fs');
+          const path = require('path');
           const release = JSON.parse(fs.readFileSync('release.json', 'utf8'));
           const releases = release.releases?.filter(r => r.type !== 'none') || [];
 
-          const packages = ['packages/sesame/package.json', 'packages/cli/package.json']
-            .map(path => JSON.parse(fs.readFileSync(path, 'utf8')))
-            .filter(pkg => pkg.name && pkg.version);
+          const dirs = fs.readdirSync('packages').filter(d => {
+            const pkgPath = path.join('packages', d, 'package.json');
+            return fs.statSync(path.join('packages', d)).isDirectory() && fs.existsSync(pkgPath);
+          });
+          const allPackages = dirs.map(d =>
+            JSON.parse(fs.readFileSync(path.join('packages', d, 'package.json'), 'utf8'))
+          );
+          const fallbackSummary = allPackages
+            .filter(pkg => pkg.name && pkg.version)
+            .map(pkg => pkg.name + '@' + pkg.version)
+            .join(', ');
 
-          const fallbackSummary = packages.map(pkg => pkg.name + '@' + pkg.version).join(', ');
           let title = 'Updating ' + fallbackSummary;
           let commit = fallbackSummary;
           if (releases.length === 1) {
@@ -86,42 +93,80 @@ jobs:
           rm -f release.json
         continue-on-error: true
 
-      - name: Create Release PR or Publish
+      - name: Create Release PR or Stage
         id: changesets
         uses: changesets/action@v1
         with:
           version: pnpm run version
-          publish: pnpm changeset publish
-          title: ${{ steps.release-info.outputs.title || 'Updating @aliou/sesame and @aliou/sesame-cli' }}
-          commit: ${{ steps.release-info.outputs.commit || '@aliou/sesame, @aliou/sesame-cli' }}
+          title: ${{ steps.release-info.outputs.title }}
+          commit: ${{ steps.release-info.outputs.commit }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check for unpublished packages and stage
+        id: check-publish
+        if: steps.changesets.outputs.hasChangesets == 'false'
+        run: |
+          VERSIONS=""
+          for pkg_dir in packages/*/; do
+            [ -f "$pkg_dir/package.json" ] || continue
+            PACKAGE_NAME=$(node -p "require('$pkg_dir/package.json').name")
+            LOCAL_VERSION=$(node -p "require('$pkg_dir/package.json').version")
+            REGISTRY_VERSION=$(npm view "$PACKAGE_NAME" version 2>/dev/null || echo "0.0.0")
+            if [ "$LOCAL_VERSION" != "$REGISTRY_VERSION" ]; then
+              echo "Staging $PACKAGE_NAME@$LOCAL_VERSION"
+              (cd "$pkg_dir" && npm stage publish)
+              if [ -n "$VERSIONS" ]; then
+                VERSIONS="$VERSIONS,$LOCAL_VERSION"
+              else
+                VERSIONS="$LOCAL_VERSION"
+              fi
+            fi
+          done
+
+          if [ -n "$VERSIONS" ]; then
+            echo "needs_staging=true" >> "$GITHUB_OUTPUT"
+            echo "version=$(echo "$VERSIONS" | cut -d',' -f1)" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_staging=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
           NPM_CONFIG_PROVENANCE: true
 
-      - name: Get package versions
-        id: versions
+      - name: Create GitHub releases
+        if: steps.check-publish.outputs.needs_staging == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          CLI_VERSION=$(node -p "require('./packages/cli/package.json').version")
-          CLI_TAG="@aliou/sesame-cli@$CLI_VERSION"
-          echo "cli_version=$CLI_VERSION" >> $GITHUB_OUTPUT
-          echo "cli_tag=$CLI_TAG" >> $GITHUB_OUTPUT
+          TAG="v${{ steps.check-publish.outputs.version }}"
+          git tag "$TAG"
+          git push origin "$TAG"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "$TAG" --notes "Release $TAG"
+          fi
 
-          if git diff-tree --no-commit-id --name-only -r HEAD | grep -q '^packages/cli/package.json$'; then
-            echo "cli_release=true" >> $GITHUB_OUTPUT
+      - name: Detect CLI release
+        id: cli-release
+        run: |
+          current_version=$(node -p "require('./packages/cli/package.json').version")
+          previous_version=$(git show HEAD^:packages/cli/package.json 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>console.log(JSON.parse(s).version))" || true)
+
+          if [ -n "${previous_version:-}" ] && [ "$current_version" != "$previous_version" ]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "tag=@aliou/sesame-cli@${current_version}" >> "$GITHUB_OUTPUT"
+            echo "version=${current_version}" >> "$GITHUB_OUTPUT"
           else
-            echo "cli_release=false" >> $GITHUB_OUTPUT
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create CLI GitHub Release
-        if: steps.versions.outputs.cli_release == 'true'
+        if: steps.cli-release.outputs.should_release == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.versions.outputs.cli_tag }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.cli-release.outputs.tag }}
         run: |
-          if ! gh release view "$TAG" &>/dev/null; then
-            gh release create "$TAG" \
-              --title "$TAG" \
-              --notes "Release $TAG"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "$TAG" --notes "Release $TAG"
           fi
 
   build-binary:
@@ -147,7 +192,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -155,7 +200,7 @@ jobs:
           node-version: 25
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
