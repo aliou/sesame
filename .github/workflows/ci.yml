@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: 25
+          node-version: 26
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -34,19 +34,11 @@ jobs:
         run: pnpm run test
 
   build-binary:
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            arch: x64
-            artifact: sesame-linux-x64
-          - os: ubuntu-24.04-arm
-            arch: arm64
-            artifact: sesame-linux-arm64
-          - os: macos-latest
-            arch: arm64
-            artifact: sesame-darwin-arm64
-    runs-on: ${{ matrix.os }}
+    name: Build cross-platform binaries
+    # Runs on macOS so the darwin-arm64 target is ad-hoc codesigned by tsdown
+    # (Gatekeeper). linux-arm64/linux-x64 are built cross-platform in the
+    # same `tsdown` invocation; LIEF injection is host-agnostic.
+    runs-on: macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -54,7 +46,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: 25
+          node-version: 26
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -62,26 +54,28 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build SEA binary
+      - name: Build SEA binaries
         run: pnpm --filter @aliou/sesame-cli run build:binary
 
-      - name: Verify binary was produced
+      - name: Verify binaries were produced
         run: |
-          if [ ! -f packages/cli/dist/sesame ]; then
-            echo "ERROR: SEA binary was not produced. tsdown may have silently failed."
-            echo "Contents of packages/cli/dist/:"
-            ls -la packages/cli/dist/
-            exit 1
-          fi
+          set -e
+          for artifact in sesame-darwin-arm64 sesame-linux-arm64 sesame-linux-x64; do
+            if [ ! -f "packages/cli/dist/$artifact" ]; then
+              echo "ERROR: $artifact was not produced. tsdown may have silently failed."
+              ls -la packages/cli/dist/
+              exit 1
+            fi
+          done
 
-      - name: Rename binary
-        run: mv packages/cli/dist/sesame packages/cli/dist/${{ matrix.artifact }}
+      - name: Smoke test (darwin-arm64)
+        run: packages/cli/dist/sesame-darwin-arm64 help
 
-      - name: Smoke test
-        run: packages/cli/dist/${{ matrix.artifact }} help
-
-      - name: Upload artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.artifact }}
-          path: packages/cli/dist/${{ matrix.artifact }}
+          name: sesame-binaries
+          path: |
+            packages/cli/dist/sesame-darwin-arm64
+            packages/cli/dist/sesame-linux-arm64
+            packages/cli/dist/sesame-linux-x64

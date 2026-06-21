@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 
 /**
- * Build a single-executable binary for the current platform using tsdown's
- * Node.js SEA support. Cross-compilation is not supported by Node SEA, so
- * CI runners are needed for other targets.
+ * Build single-executable binaries for all targets via tsdown + @tsdown/exe.
+ *
+ * Node SEA does not support cross-compilation natively; @tsdown/exe works
+ * around this by downloading each target platform's Node.js binary and
+ * injecting the blob there. Output (platform-arch suffixed):
+ *
+ *   dist/sesame-darwin-arm64
+ *   dist/sesame-linux-arm64
+ *   dist/sesame-linux-x64
  */
 
 import { execSync } from "node:child_process";
 
-console.log("Building binary for current platform...");
-execSync("npx tsdown", { stdio: "inherit" });
+console.log("Building cross-platform SEA binaries...");
+execSync("pnpm exec tsdown", { stdio: "inherit" });
 console.log("Done.");

@@ -40,7 +40,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "25"
+          node-version: "26"
           registry-url: "https://registry.npmjs.org"
           scope: "@aliou"
           cache: "pnpm"
@@ -125,22 +125,13 @@ jobs:
           fi
 
   build-binary:
-    name: Build ${{ matrix.artifact }}
+    name: Build cross-platform binaries
     needs: publish
     if: needs.publish.outputs.cli_release == 'true'
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            arch: x64
-            artifact: sesame-linux-x64
-          - os: ubuntu-24.04-arm
-            arch: arm64
-            artifact: sesame-linux-arm64
-          - os: macos-latest
-            arch: arm64
-            artifact: sesame-darwin-arm64
-    runs-on: ${{ matrix.os }}
+    # Runs on macOS so the darwin-arm64 target is ad-hoc codesigned by tsdown
+    # (Gatekeeper). linux-arm64/linux-x64 are built cross-platform in the
+    # same `tsdown` invocation via @tsdown/exe.
+    runs-on: macos-latest
     permissions:
       contents: write
     steps:
@@ -152,7 +143,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: 25
+          node-version: 26
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -160,39 +151,46 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build SEA binary
+      - name: Build SEA binaries
         run: pnpm --filter @aliou/sesame-cli run build:binary
 
-      - name: Verify binary was produced
+      - name: Verify binaries were produced
         run: |
-          if [ ! -f packages/cli/dist/sesame ]; then
-            echo "ERROR: SEA binary was not produced. tsdown may have silently failed."
-            echo "Contents of packages/cli/dist/:"
-            ls -la packages/cli/dist/
-            exit 1
-          fi
+          set -e
+          for artifact in sesame-darwin-arm64 sesame-linux-arm64 sesame-linux-x64; do
+            if [ ! -f "packages/cli/dist/$artifact" ]; then
+              echo "ERROR: $artifact was not produced. tsdown may have silently failed."
+              ls -la packages/cli/dist/
+              exit 1
+            fi
+          done
 
-      - name: Rename binary
-        run: mv packages/cli/dist/sesame packages/cli/dist/${{ matrix.artifact }}
-
-      - name: Compute binary hash
-        id: hash
+      - name: Compute binary hashes
         run: |
-          HASH=$(node -e "const { createHash } = require('node:crypto'); const { readFileSync } = require('node:fs'); console.log('sha256-' + createHash('sha256').update(readFileSync('packages/cli/dist/${{ matrix.artifact }}')).digest('base64'))")
-          echo "hash=${HASH}" >> "$GITHUB_OUTPUT"
-          echo "${HASH}" > ${{ matrix.artifact }}.sha256
+          set -e
+          for artifact in sesame-darwin-arm64 sesame-linux-arm64 sesame-linux-x64; do
+            HASH=$(node -e "const { createHash } = require('node:crypto'); const { readFileSync } = require('node:fs'); console.log('sha256-' + createHash('sha256').update(readFileSync('packages/cli/dist/' + process.argv[1])).digest('base64'))" "$artifact")
+            echo "$HASH" > "$artifact.sha256"
+          done
 
-      - name: Upload binary hash artifact
+      - name: Upload binary hash artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}-hash
-          path: ${{ matrix.artifact }}.sha256
+          path: |
+            sesame-darwin-arm64.sha256
+            sesame-linux-arm64.sha256
+            sesame-linux-x64.sha256
 
       - name: Upload to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.publish.outputs.cli_tag }}
-        run: gh release upload "$TAG" packages/cli/dist/${{ matrix.artifact }} --clobber
+        run: |
+          gh release upload "$TAG" \
+            packages/cli/dist/sesame-darwin-arm64 \
+            packages/cli/dist/sesame-linux-arm64 \
+            packages/cli/dist/sesame-linux-x64 \
+            --clobber
 
   update-flake-hashes:
     name: Update flake hashes
