@@ -10,7 +10,7 @@ Search ranking uses SQLite FTS5 BM25 through Node's built-in `node:sqlite` modul
 pnpm add @aliou/sesame
 ```
 
-Runtime requirement: Node.js 25 or newer.
+Runtime requirement: Node.js 26 or newer.
 
 ## Main exports
 

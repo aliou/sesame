@@ -24,7 +24,7 @@ brew install sesame
 
 ### From source
 
-Requires Node.js 25 or newer and pnpm.
+Requires Node.js 26 or newer and pnpm.
 
 ## Quickstart (repo)
 
