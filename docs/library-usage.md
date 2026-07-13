@@ -91,7 +91,7 @@ const results = search(db, "package exports", {
 `SearchOptions` supports:
 
 - `cwd`: session cwd prefix
-- `after`, `before`: ISO date strings compared against `sessions.created_at`
+- `after`, `before`: ISO date strings compared against `sessions.modified_at`
 - `limit`: max sessions returned; default 10
 - `toolsOnly`: restrict matches to `tool_call` chunks
 - `toolName`: restrict matches to one tool name
@@ -100,7 +100,7 @@ const results = search(db, "package exports", {
 - `status`: `"success" | "error"`; applies only when `toolsOnly` or `toolName` is set
 - `json`: carried for CLI option plumbing; storage results are always JavaScript objects
 
-`search(db, "*", options)` lists sessions by `modified_at DESC` instead of using FTS. Empty or whitespace-only query strings are normalized to `"*"` in the library.
+`search(db, "*", options)` lists sessions by `modified_at DESC` instead of using FTS. The query is optional; omitted, empty, and whitespace-only queries are normalized to `"*"`. Multi-term FTS searches first match all terms, then retry with any term only when filters leave no all-term results.
 
 `SearchResult` contains:
 
@@ -115,10 +115,14 @@ interface SearchResult {
   createdAt: string | null;
   modifiedAt: string | null;
   matchedSnippet: string;
+  matchMode: "all" | "any" | "browse";
+  matchedType: string | null;
+  matchedEntryId: string | null;
+  matchedAt: string | null;
 }
 ```
 
-For FTS searches, lower raw BM25 scores are better. For `"*"` list searches, `score` is `0` and `matchedSnippet` is the session name or `"(recent session)"`.
+For FTS searches, lower raw BM25 scores are better. `matchedType`, `matchedEntryId`, and `matchedAt` identify the best-scoring chunk. Browse results use `matchMode: "browse"` and null provenance. For browse searches, `score` is `0` and `matchedSnippet` is the session name or `"(recent session)"`.
 
 ## Listing sessions
 
@@ -134,6 +138,8 @@ const sessions = listSessions(db, {
 ```
 
 `limit` is clamped to `1..500`; `offset` is clamped to `>= 0`.
+
+Run `sesame index --full` after upgrading to populate searchable titles/checkpoints and remove existing discovery-result bodies from the index.
 
 ## Config and paths
 

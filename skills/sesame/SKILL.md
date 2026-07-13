@@ -12,7 +12,7 @@ Sesame indexes coding agent sessions into SQLite FTS5 and ranks results with BM2
 Use **sesame** when you need:
 - Multi-word topic search (`"nix infra cleanup"`, `"publish workflow changesets"`)
 - Tool-call oriented search (`--tools`, `--tool bash`, `--path package.json`)
-- Session discovery / paging (`"*"` with filters and `--exclude`)
+- Session discovery / paging (no query or `"*"` with filters and `--exclude`)
 
 Use **find_sessions** for quick exact keyword lookups.
 Use **read_session** after you identified the session to inspect.
@@ -23,6 +23,7 @@ Use **read_session** after you identified the session to inspect.
 
 ```bash
 sesame search "query"
+sesame search --after 7d
 sesame search "query" --json
 sesame search "query" --cwd /path/to/project
 sesame search "query" --after 7d
@@ -66,5 +67,8 @@ sesame watch --interval 30
 
 ## Notes
 
+- Multi-word searches use all terms first, then any-term fallback only when filters leave no strict matches. JSON output includes `matchMode` and matching entry provenance.
+- Date filters use each session's modification time.
+- Titles and active checkpoints are searchable. Discovery-tool result bodies are not indexed.
 - Scores are normalized to `0.00-1.00` for display. Higher is better.
 - `sesame watch` runs an initial index pass, then re-indexes on change.

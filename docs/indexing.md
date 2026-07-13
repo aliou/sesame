@@ -5,7 +5,7 @@
 Indexing converts Pi JSONL session files into normalized SQLite records:
 
 - `sessions`: one row per session, with metadata, source path, cwd, timestamps, mtime, and parent session id
-- `chunks`: searchable units derived from messages and assistant tool calls
+- `chunks`: searchable units derived from messages, assistant tool calls, titles, and checkpoints
 - `chunks_fts`: external-content FTS5 table over `chunks.content`
 - `metadata`: key/value state such as `last_sync_at`
 - `schema_migrations`: applied migration tracking
@@ -16,7 +16,7 @@ Flow:
 2. Expand `~` in configured paths.
 3. Scan each Pi session root.
 4. Parse candidate `.jsonl` files with `PiParser`.
-5. Build `message` and `tool_call` chunks.
+5. Build `message`, `tool_call`, and metadata chunks.
 6. Replace changed sessions with delete + insert in one transaction.
 7. Let SQL triggers keep `chunks_fts` synchronized.
 8. Update `metadata.last_sync_at` when the run has changes and zero errors.
@@ -69,7 +69,8 @@ This keeps indexing fast for large session directories while keeping FTS state c
 
 - session header: `id`, `cwd`, `timestamp`
 - parent session id from `parentSession`, by extracting the UUID from the referenced path
-- optional session name from `session_info.name`
+- current session name from the final `session_info.name`; blank names clear it
+- active checkpoint labels, resolved to their target entry metadata; blank or omitted labels remove a checkpoint
 - user text messages
 - assistant text messages
 - assistant `toolCall` blocks as structured `ToolCall` objects
@@ -84,7 +85,6 @@ Skipped entries:
 - `model_change`
 - `thinking_level_change`
 - `custom`
-- `label`
 - image and thinking content blocks inside messages, because only text blocks are indexed today
 
 Malformed JSONL lines are warned and skipped; parsing continues for the rest of the file.
@@ -122,13 +122,24 @@ Formatter behavior:
 
 Pi assistant tool-call chunks usually do not have results attached today; tool results are indexed separately as message chunks.
 
+### Metadata chunks
+
+The final session title and each active checkpoint are searchable metadata chunks:
+
+- `kind = "metadata"`, `source_type = "session_info"`, `content = "session: <title>"`
+- `kind = "metadata"`, `source_type = "label"`, `content = "checkpoint: <label>"`
+
+Checkpoint chunks retain the labeled target's `entry_id`, parent entry id, and timestamp.
+
+Tool-result bodies for `find_sessions`, `list_sessions`, and `read_session` are excluded to prevent prior session-search output from polluting the index. Their assistant tool-call arguments remain searchable.
+
 ## Search behavior
 
 Normal queries are tokenized by whitespace, each token is quoted, and then SQLite FTS5 matches against `chunks_fts`. This avoids accidental FTS operator syntax from punctuation in user queries.
 
-Search then joins matching chunks to sessions, applies filters, groups by session, keeps the best-scoring chunk per session, sorts by BM25 score ascending, and applies `limit`.
+Search joins matching chunks to sessions, applies filters, groups by session, keeps the best-scoring chunk per session, sorts by BM25 score ascending, and applies `limit`. Multi-term searches first require all terms. If no filtered results remain, Sesame retries with any-term matching. Results report `matchMode` as `"all"`, `"any"`, or `"browse"`.
 
-Special query `"*"` bypasses FTS and lists sessions by `modified_at DESC`. It still honors session filters, exclude filters, and tool filters where applicable.
+An omitted, empty, or `"*"` query bypasses FTS and lists sessions by `modified_at DESC`. It still honors session filters, exclude filters, and tool filters where applicable. Date filters always compare `sessions.modified_at`.
 
 ## Database schema
 
@@ -192,6 +203,12 @@ Indexes currently include:
 ## Full rebuild
 
 `sesame index --full` calls `dropAll()` before indexing.
+
+Run a full rebuild after upgrading to populate title/checkpoint metadata and remove previously indexed session-discovery result bodies:
+
+```bash
+sesame index --full
+```
 
 `dropAll()`:
 

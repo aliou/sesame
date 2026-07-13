@@ -5,7 +5,7 @@
 ```bash
 sesame index
 sesame index --full
-sesame search <query> [options]
+sesame search [query] [options]
 sesame status
 sesame watch
 sesame watch --interval <seconds>
@@ -45,14 +45,14 @@ Searches indexed chunks with SQLite FTS5 + BM25, then returns the best matching 
 Usage:
 
 ```bash
-sesame search "query" [options]
+sesame search [query] [options]
 ```
 
 Options:
 
 - `--cwd <path>`: filter sessions by `cwd` prefix
-- `--after <date>`: filter by `created_at >= date`
-- `--before <date>`: filter by `created_at <= date`
+- `--after <date>`: filter by `modified_at >= date`
+- `--before <date>`: filter by `modified_at <= date`
 - `--limit <n>`: max results (default: 10)
 - `--tools`: search only assistant tool-call chunks
 - `--tool <name>`: search a specific tool name
@@ -69,7 +69,8 @@ Notes:
 
 - Query tokens are escaped and quoted before FTS matching, so punctuation is treated as search text rather than FTS syntax.
 - CLI scores are display-normalized. Ranking still comes from SQLite FTS5 BM25, where lower raw scores are better.
-- An empty query is accepted by the library, but the CLI requires a query argument. Use `"*"` to list sessions.
+- Multiple query terms first require all terms. If filters leave no all-term results, Sesame retries with any-term matching and reports the mode in `matchMode`.
+- Omit the query, pass an empty query, or use `"*"` to browse sessions by `modified_at DESC`.
 - `status` filtering exists in the library API, not as a CLI flag.
 
 Special query:
@@ -86,7 +87,7 @@ Examples:
 sesame search "nix infra simplify"
 sesame search "publish workflow" --after 2w --limit 5
 sesame search "package.json exports" --tools --tool write
-sesame search "*" --cwd /Users/me/code --exclude abc --exclude def
+sesame search --cwd /Users/me/code --exclude abc --exclude def
 sesame search "deploy" --json
 ```
 
@@ -105,7 +106,12 @@ JSON output has this shape:
       "name": "Session name",
       "score": 0.42,
       "created": "2026-05-08T12:00:00.000Z",
-      "matchedSnippet": "..."
+      "modified": "2026-05-08T12:00:00.000Z",
+      "matchedSnippet": "...",
+      "matchMode": "all",
+      "matchedType": "message",
+      "matchedEntryId": "...",
+      "matchedAt": "2026-05-08T12:00:00.000Z"
     }
   ]
 }
