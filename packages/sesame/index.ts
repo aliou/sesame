@@ -26,7 +26,12 @@ export {
   search,
   setMetadata,
 } from "./storage/db";
-export type { ParsedSession, ToolCall, Turn } from "./types/session";
+export type {
+  ParsedSession,
+  SessionMetadata,
+  ToolCall,
+  Turn,
+} from "./types/session";
 export type { SesameConfig } from "./utils/config";
 export { expandPath, loadConfig } from "./utils/config";
 export { parseRelativeDate } from "./utils/date";

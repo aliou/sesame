@@ -97,6 +97,67 @@ describe("PiParser", () => {
       expect(session.name).toBe("My Test Session");
     });
 
+    test("keeps only the current title and active resolved checkpoints", async () => {
+      const path = addSessionFile(
+        createSessionBuilder()
+          .withHeader()
+          .withName(" First title ", {
+            id: "title-1",
+            timestamp: "2026-01-01T10:00:00.000Z",
+          })
+          .withUserMessage("Checkpoint target", {
+            id: "message-1",
+            parentId: "parent-1",
+            timestamp: "2026-01-01T10:01:00.000Z",
+          })
+          .withLabel("message-1", " Initial checkpoint ")
+          .withLabel("message-1", " Final checkpoint ")
+          .withLabel("missing", "Ignored checkpoint")
+          .withName(" Final title ", {
+            id: "title-2",
+            timestamp: "2026-01-01T10:02:00.000Z",
+          })
+          .build(),
+      );
+
+      const session = await parser.parse(path);
+
+      expect(session.name).toBe("Final title");
+      expect(session.metadata).toEqual([
+        {
+          sourceType: "session_info",
+          textContent: "Final title",
+          entryId: "title-2",
+          timestamp: "2026-01-01T10:02:00.000Z",
+        },
+        {
+          sourceType: "label",
+          textContent: "Final checkpoint",
+          entryId: "message-1",
+          parentEntryId: "parent-1",
+          timestamp: "2026-01-01T10:01:00.000Z",
+        },
+      ]);
+    });
+
+    test("clears titles and labels with empty values", async () => {
+      const path = addSessionFile(
+        createSessionBuilder()
+          .withHeader()
+          .withName("Title")
+          .withUserMessage("Checkpoint target", { id: "message-1" })
+          .withLabel("message-1", "Checkpoint")
+          .withLabel("message-1", "")
+          .withName("   ")
+          .build(),
+      );
+
+      const session = await parser.parse(path);
+
+      expect(session.name).toBeUndefined();
+      expect(session.metadata).toEqual([]);
+    });
+
     test("parses user messages into turns with role user", async () => {
       const path = addSessionFile(
         createSessionBuilder()

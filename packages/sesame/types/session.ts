@@ -40,6 +40,15 @@ export interface Turn {
   customType?: string;
 }
 
+/** Searchable session metadata with the Pi entry that defines it. */
+export interface SessionMetadata {
+  sourceType: "session_info" | "label";
+  textContent: string;
+  entryId?: string;
+  parentEntryId?: string;
+  timestamp?: string;
+}
+
 export interface ParsedSession {
   id: string;
   /** Source parser ID (`"pi"`) */
@@ -51,6 +60,8 @@ export interface ParsedSession {
   createdAt: string;
   modifiedAt: string;
   turns: Turn[];
+  /** Current title and active checkpoints resolved from Pi metadata entries. */
+  metadata: SessionMetadata[];
   /** ID of parent session (if this session was forked from another) */
   parentSessionId?: string;
 }

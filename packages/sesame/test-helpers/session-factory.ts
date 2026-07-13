@@ -8,11 +8,12 @@ export interface SessionBuilder {
     cwd?: string;
     timestamp?: string;
   }): SessionBuilder;
-  withName(name: string): SessionBuilder;
-  withUserMessage(text: string): SessionBuilder;
+  withName(name: string, entry?: EntryOptions): SessionBuilder;
+  withUserMessage(text: string, entry?: EntryOptions): SessionBuilder;
   withAssistantMessage(text: string): SessionBuilder;
   withWriteToolCall(path: string, content: string): SessionBuilder;
   withBashToolCall(command: string): SessionBuilder;
+  withToolCall(name: string, args: Record<string, unknown>): SessionBuilder;
   withToolResult(
     toolName: string,
     content: string,
@@ -20,7 +21,14 @@ export interface SessionBuilder {
   ): SessionBuilder;
   withBashExecution(command: string, output: string): SessionBuilder;
   withCompactionSummary(summary: string): SessionBuilder;
+  withLabel(targetId: string, label?: string): SessionBuilder;
   build(): string;
+}
+
+interface EntryOptions {
+  id?: string;
+  parentId?: string | null;
+  timestamp?: string;
 }
 
 export function createSessionBuilder(): SessionBuilder {
@@ -42,15 +50,16 @@ export function createSessionBuilder(): SessionBuilder {
       return this;
     },
 
-    withName(name: string) {
-      lines.push(JSON.stringify({ type: "session_info", name }));
+    withName(name: string, entry = {}) {
+      lines.push(JSON.stringify({ type: "session_info", name, ...entry }));
       return this;
     },
 
-    withUserMessage(text: string) {
+    withUserMessage(text: string, entry = {}) {
       lines.push(
         JSON.stringify({
           type: "message",
+          ...entry,
           message: {
             role: "user",
             content: [{ type: "text", text }],
@@ -113,6 +122,26 @@ export function createSessionBuilder(): SessionBuilder {
       return this;
     },
 
+    withToolCall(name: string, args: Record<string, unknown>) {
+      lines.push(
+        JSON.stringify({
+          type: "message",
+          message: {
+            role: "assistant",
+            content: [
+              {
+                type: "toolCall",
+                id: "tc_1",
+                name,
+                arguments: args,
+              },
+            ],
+          },
+        }),
+      );
+      return this;
+    },
+
     withToolResult(
       toolName: string,
       content: string,
@@ -150,6 +179,11 @@ export function createSessionBuilder(): SessionBuilder {
 
     withCompactionSummary(summary: string) {
       lines.push(JSON.stringify({ type: "compaction", summary }));
+      return this;
+    },
+
+    withLabel(targetId: string, label?: string) {
+      lines.push(JSON.stringify({ type: "label", targetId, label }));
       return this;
     },
 

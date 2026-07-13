@@ -288,5 +288,55 @@ describe("indexer", () => {
       expect(getSession(db, "target-sess")).not.toBeNull();
       expect(getSession(db, "other-sess")).toBeNull();
     });
+
+    test("indexes current titles and checkpoints but excludes discovery results", async () => {
+      const filePath = addFile(
+        "/tmp/sesame-sessions/metadata.jsonl",
+        createSessionBuilder()
+          .withHeader({ id: "metadata" })
+          .withName("Searchable title", { id: "title-entry" })
+          .withUserMessage("Checkpoint target", { id: "message-entry" })
+          .withLabel("message-entry", "Searchable checkpoint")
+          .withToolCall("find_sessions", { query: "Find session arguments" })
+          .withToolResult("FIND_SESSIONS", "Secret discovery result")
+          .withToolResult("Bash", "Other result remains searchable")
+          .build(),
+      );
+
+      await indexFile(db, filePath);
+
+      const chunks = db
+        .prepare(
+          "SELECT kind, content, source_type, entry_id FROM chunks WHERE session_id = ? ORDER BY seq",
+        )
+        .all("metadata") as Array<{
+        kind: string;
+        content: string;
+        source_type: string | null;
+        entry_id: string | null;
+      }>;
+
+      expect(chunks).toContainEqual({
+        kind: "metadata",
+        content: "session: Searchable title",
+        source_type: "session_info",
+        entry_id: "title-entry",
+      });
+      expect(chunks).toContainEqual({
+        kind: "metadata",
+        content: "checkpoint: Searchable checkpoint",
+        source_type: "label",
+        entry_id: "message-entry",
+      });
+      expect(chunks.map((chunk) => chunk.content).join("\n")).not.toContain(
+        "Secret discovery result",
+      );
+      expect(chunks.map((chunk) => chunk.content).join("\n")).toContain(
+        "Other result remains searchable",
+      );
+      expect(chunks.map((chunk) => chunk.content).join("\n")).toContain(
+        "Find session arguments",
+      );
+    });
   });
 });

@@ -4,7 +4,12 @@
 
 import { readFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
-import type { ParsedSession, ToolCall, Turn } from "../types/session";
+import type {
+  ParsedSession,
+  SessionMetadata,
+  ToolCall,
+  Turn,
+} from "../types/session";
 import { readFirstLine } from "../utils/io";
 
 interface SessionHeader {
@@ -19,6 +24,9 @@ interface SessionHeader {
 interface SessionInfo {
   type: "session_info";
   name: string;
+  id?: string;
+  parentId?: string | null;
+  timestamp?: string;
 }
 
 interface TextContent {
@@ -181,6 +189,12 @@ interface LabelEntry {
   label?: string;
 }
 
+interface EntryMetadata {
+  entryId: string;
+  parentEntryId?: string;
+  timestamp?: string;
+}
+
 type JSONLLine =
   | SessionHeader
   | SessionInfo
@@ -257,6 +271,9 @@ export class PiParser {
     let parentSessionId: string | undefined;
     const modifiedAt = fileStat.mtime.toISOString();
     const turns: Turn[] = [];
+    const entries = new Map<string, EntryMetadata>();
+    const labels = new Map<string, string>();
+    let title: SessionMetadata | undefined;
 
     for (const [index, line] of lines.entries()) {
       try {
@@ -277,7 +294,24 @@ export class PiParser {
 
           case "session_info": {
             const info = parsed as SessionInfo;
-            sessionName = info.name;
+            const name = info.name.trim();
+            sessionName = name || undefined;
+            title = name
+              ? {
+                  sourceType: "session_info",
+                  textContent: name,
+                  entryId: info.id,
+                  parentEntryId: info.parentId ?? undefined,
+                  timestamp: info.timestamp,
+                }
+              : undefined;
+            if (info.id) {
+              entries.set(info.id, {
+                entryId: info.id,
+                parentEntryId: info.parentId ?? undefined,
+                timestamp: info.timestamp,
+              });
+            }
             break;
           }
 
@@ -294,6 +328,13 @@ export class PiParser {
               timestamp: msg.timestamp,
               sourceType: "message" as const,
             };
+            if (msg.id) {
+              entries.set(msg.id, {
+                entryId: msg.id,
+                parentEntryId: msg.parentId ?? undefined,
+                timestamp: msg.timestamp,
+              });
+            }
 
             if (msg.message.role === "user") {
               const userMsg = msg as UserMessage;
@@ -357,6 +398,11 @@ export class PiParser {
 
           case "custom_message": {
             const customMsg = parsed as CustomMessageEntry;
+            entries.set(customMsg.id, {
+              entryId: customMsg.id,
+              parentEntryId: customMsg.parentId ?? undefined,
+              timestamp: customMsg.timestamp,
+            });
             const textContent = extractTextContent(customMsg.content);
             // Prefix with customType to make it searchable
             const prefixedContent = `[${customMsg.customType}]\n${textContent}`;
@@ -376,6 +422,11 @@ export class PiParser {
 
           case "compaction": {
             const compaction = parsed as CompactionEntry;
+            entries.set(compaction.id, {
+              entryId: compaction.id,
+              parentEntryId: compaction.parentId ?? undefined,
+              timestamp: compaction.timestamp,
+            });
             turns.push({
               role: "system",
               textContent: compaction.summary,
@@ -391,6 +442,11 @@ export class PiParser {
 
           case "branch_summary": {
             const branch = parsed as BranchSummaryEntry;
+            entries.set(branch.id, {
+              entryId: branch.id,
+              parentEntryId: branch.parentId ?? undefined,
+              timestamp: branch.timestamp,
+            });
             turns.push({
               role: "system",
               textContent: branch.summary,
@@ -404,10 +460,16 @@ export class PiParser {
             break;
           }
 
+          case "label": {
+            const label = parsed as LabelEntry;
+            const text = label.label?.trim() ?? "";
+            labels.set(label.targetId, text);
+            break;
+          }
+
           case "model_change":
           case "thinking_level_change":
           case "custom":
-          case "label":
             // Skip metadata/extension state lines (not part of LLM context)
             break;
 
@@ -423,6 +485,24 @@ export class PiParser {
       }
     }
 
+    const metadata: SessionMetadata[] = [];
+    if (title) {
+      metadata.push(title);
+    }
+    for (const [targetId, label] of labels) {
+      const target = entries.get(targetId);
+      if (!label || !target) {
+        continue;
+      }
+      metadata.push({
+        sourceType: "label",
+        textContent: label,
+        entryId: target.entryId,
+        parentEntryId: target.parentEntryId,
+        timestamp: target.timestamp,
+      });
+    }
+
     return {
       id: sessionId,
       source: this.id,
@@ -431,6 +511,7 @@ export class PiParser {
       createdAt,
       modifiedAt,
       turns,
+      metadata,
       parentSessionId,
     };
   }

@@ -19,6 +19,16 @@ export interface IndexResult {
   errors: number;
 }
 
+const DISCOVERY_TOOLS = new Set([
+  "find_sessions",
+  "list_sessions",
+  "read_session",
+]);
+
+function isDiscoveryToolResult(toolName: string | undefined): boolean {
+  return toolName !== undefined && DISCOVERY_TOOLS.has(toolName.toLowerCase());
+}
+
 /**
  * Index a single file that has already passed `canParse`.
  *
@@ -87,7 +97,7 @@ async function indexKnownFile(
     let seq = 0;
     for (const turn of parsedSession.turns) {
       // Message chunk
-      if (turn.textContent.trim()) {
+      if (turn.textContent.trim() && !isDiscoveryToolResult(turn.toolName)) {
         chunks.push({
           id: 0,
           session_id: parsedSession.id,
@@ -124,6 +134,25 @@ async function indexKnownFile(
           });
         }
       }
+    }
+
+    for (const metadata of parsedSession.metadata) {
+      const prefix =
+        metadata.sourceType === "session_info" ? "session" : "checkpoint";
+      chunks.push({
+        id: 0,
+        session_id: parsedSession.id,
+        kind: "metadata",
+        role: null,
+        tool_name: null,
+        seq: seq++,
+        content: `${prefix}: ${metadata.textContent}`,
+        is_error: null,
+        entry_id: metadata.entryId ?? null,
+        parent_entry_id: metadata.parentEntryId ?? null,
+        timestamp: metadata.timestamp ?? null,
+        source_type: metadata.sourceType,
+      });
     }
 
     // Insert into database
