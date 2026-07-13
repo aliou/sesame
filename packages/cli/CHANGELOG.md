@@ -1,5 +1,24 @@
 # @aliou/sesame-cli
 
+## 0.11.0
+
+### Minor Changes
+
+- 8dba5d1: Bump Node engine requirement to >=26.0.0 and migrate binary builds to
+  @tsdown/exe cross-platform SEA (replaces per-platform CI matrix with a
+  single build job; drops useCodeCache which is incompatible with
+  cross-platform SEAs). Repos using the flake devShell now get Node 26.
+- 36d583f: Add searchable current session titles and active checkpoints, automatic broad
+  search fallback, match provenance, and optional-query session browsing. Date
+  filters use session modification times. Rebuild existing indexes with `sesame
+index --full` to apply the updated chunking rules.
+
+### Patch Changes
+
+- Updated dependencies [8dba5d1]
+- Updated dependencies [36d583f]
+  - @aliou/sesame@0.11.0
+
 ## 0.10.0
 
 ### Minor Changes
