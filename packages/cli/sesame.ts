@@ -29,7 +29,7 @@ Usage: sesame <command> [options]
 Commands:
   index              Index session files (incremental)
   index --full       Drop and rebuild index
-  search <query>     Search sessions
+  search [query]     Search sessions or browse recent sessions
   status             Show index statistics
   watch              Watch session files and index on change
   watch --interval <seconds>  Poll-based re-indexing at fixed interval

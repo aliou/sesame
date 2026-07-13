@@ -19,21 +19,6 @@ function normalizeScore(rawScore: number): string {
   return normalized.toFixed(2);
 }
 
-function printUsage() {
-  console.log(`Usage: sesame search <query> [options]
-
-Options:
-  --cwd <path>       Filter by project directory
-  --after <date>     Filter sessions after date (7d, 2w, 1m, or ISO date)
-  --before <date>    Filter sessions before date
-  --limit <n>        Max results (default: 10)
-  --tools            Search only tool call chunks
-  --tool <name>      Search specific tool type
-  --path <file>      Find sessions that touched a file
-  --exclude <id>     Exclude session ID (repeatable)
-  --json             Output as JSON`);
-}
-
 export default async function searchCommand(args: string[]): Promise<void> {
   // Parse arguments
   let query: string | undefined;
@@ -70,12 +55,6 @@ export default async function searchCommand(args: string[]): Promise<void> {
     }
   }
 
-  // Validate query - empty string is allowed (will be normalized to "*" in search)
-  if (query === undefined) {
-    printUsage();
-    process.exit(1);
-  }
-
   // Load config (not strictly needed for search, but keeps consistency)
   await loadConfig();
 
@@ -86,13 +65,14 @@ export default async function searchCommand(args: string[]): Promise<void> {
 
   try {
     const results = search(db, query, options);
+    const displayQuery = query?.trim() || "*";
 
     if (results.length === 0) {
       if (options.json) {
         console.log(
           JSON.stringify(
             {
-              query,
+              query: displayQuery,
               resultCount: 0,
               results: [],
             },
@@ -101,7 +81,7 @@ export default async function searchCommand(args: string[]): Promise<void> {
           ),
         );
       } else {
-        console.log(`No sessions found matching "${query}"`);
+        console.log(`No sessions found matching "${displayQuery}"`);
       }
       return;
     }
@@ -111,7 +91,7 @@ export default async function searchCommand(args: string[]): Promise<void> {
       console.log(
         JSON.stringify(
           {
-            query,
+            query: displayQuery,
             resultCount: results.length,
             results: results.map((r) => ({
               sessionId: r.sessionId,
@@ -121,7 +101,12 @@ export default async function searchCommand(args: string[]): Promise<void> {
               name: r.name,
               score: Number.parseFloat(normalizeScore(r.score)),
               created: r.createdAt,
+              modified: r.modifiedAt,
               matchedSnippet: r.matchedSnippet,
+              matchMode: r.matchMode,
+              matchedType: r.matchedType,
+              matchedEntryId: r.matchedEntryId,
+              matchedAt: r.matchedAt,
             })),
           },
           null,
@@ -129,13 +114,15 @@ export default async function searchCommand(args: string[]): Promise<void> {
         ),
       );
     } else {
-      console.log(`Found ${results.length} sessions matching "${query}"\n`);
+      console.log(
+        `Found ${results.length} sessions matching "${displayQuery}"\n`,
+      );
 
       for (const result of results) {
         const score = normalizeScore(result.score);
         const name = result.name || "Unnamed";
-        const date = result.createdAt
-          ? new Date(result.createdAt).toISOString().split("T")[0]
+        const date = result.modifiedAt
+          ? new Date(result.modifiedAt).toISOString().split("T")[0]
           : "unknown";
 
         console.log(`  [${score}] ${result.sessionId} (${name}) - ${date}`);

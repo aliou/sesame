@@ -46,4 +46,14 @@ describe("search command", () => {
       }),
     );
   });
+
+  test("browses when options are provided without a query", async () => {
+    await searchCommand(["--after", "7d", "--json"]);
+
+    expect(sesameModule.search).toHaveBeenCalledWith(
+      expect.anything(),
+      undefined,
+      expect.objectContaining({ after: "7d" }),
+    );
+  });
 });
