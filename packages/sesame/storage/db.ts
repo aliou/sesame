@@ -56,6 +56,10 @@ export interface SearchResult {
   createdAt: string | null;
   modifiedAt: string | null;
   matchedSnippet: string;
+  matchMode: "all" | "any" | "browse";
+  matchedType: string | null;
+  matchedEntryId: string | null;
+  matchedAt: string | null;
 }
 
 export interface ListSessionsOptions {
@@ -91,6 +95,14 @@ function escapeFtsQuery(query: string): string {
     .filter(Boolean)
     .map((token) => `"${token.replace(/"/g, '""')}"`)
     .join(" ");
+}
+
+function escapeFtsAnyQuery(query: string): string {
+  return query
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) => `"${token.replace(/"/g, '""')}"`)
+    .join(" OR ");
 }
 
 const SCHEMA = `
@@ -315,12 +327,13 @@ function listAllSessions(db: Database, options: SearchOptions): SearchResult[] {
     limit = 10,
     toolsOnly = false,
     toolName,
+    pathFilter,
     exclude,
     status,
   } = options;
 
   const needsChunkJoin =
-    toolsOnly || toolName || (status && (toolsOnly || toolName));
+    toolsOnly || toolName || pathFilter || (status && (toolsOnly || toolName));
 
   let sql: string;
   if (needsChunkJoin) {
@@ -360,12 +373,12 @@ function listAllSessions(db: Database, options: SearchOptions): SearchResult[] {
   }
 
   if (after) {
-    sql += " AND s.created_at >= ?";
+    sql += " AND s.modified_at >= ?";
     params.push(after);
   }
 
   if (before) {
-    sql += " AND s.created_at <= ?";
+    sql += " AND s.modified_at <= ?";
     params.push(before);
   }
 
@@ -382,6 +395,11 @@ function listAllSessions(db: Database, options: SearchOptions): SearchResult[] {
     if (toolName) {
       sql += " AND c.tool_name = ?";
       params.push(toolName);
+    }
+
+    if (pathFilter) {
+      sql += " AND c.kind = 'tool_call' AND c.content LIKE ?";
+      params.push(`%${pathFilter}%`);
     }
 
     if (status && (toolsOnly || toolName)) {
@@ -423,13 +441,18 @@ function listAllSessions(db: Database, options: SearchOptions): SearchResult[] {
     createdAt: row.createdAt,
     modifiedAt: row.modifiedAt,
     matchedSnippet: row.name || "(recent session)",
+    matchMode: "browse",
+    matchedType: null,
+    matchedEntryId: null,
+    matchedAt: null,
   }));
 }
 
-export function search(
+function searchFts(
   db: Database,
-  query: string,
-  options: SearchOptions = {},
+  ftsQuery: string,
+  options: SearchOptions,
+  matchMode: "all" | "any",
 ): SearchResult[] {
   const {
     cwd,
@@ -443,52 +466,8 @@ export function search(
     status,
   } = options;
 
-  // Normalize empty query to "*" for listing all sessions with filters
-  if (!query || query.trim() === "") {
-    query = "*";
-  }
-
-  // Special case: "*" means list all sessions with filters
-  if (query === "*") {
-    // Validate that we have at least one constraint (limit counts due to default)
-    const hasFilters = cwd || after || before || limit;
-    if (!hasFilters) {
-      throw new Error(
-        'Query "*" requires at least one filter (cwd, after, before, or limit)',
-      );
-    }
-    return listAllSessions(db, options);
-  }
-
-  const safeQuery = escapeFtsQuery(query);
-
-  // First, get matching chunk IDs with scores from FTS
-  const ftsQuery = `
-    SELECT 
-      rowid,
-      bm25(chunks_fts) as score,
-      snippet(chunks_fts, 0, '', '', '...', 32) as snippet
-    FROM chunks_fts
-    WHERE chunks_fts MATCH ?
-  `;
-
-  const ftsStmt = db.prepare(ftsQuery);
-  const ftsResults = ftsStmt.all(safeQuery) as Array<{
-    rowid: number;
-    score: number;
-    snippet: string;
-  }>;
-
-  if (ftsResults.length === 0) {
-    return [];
-  }
-
-  // Build main query with filters
-  const rowids = ftsResults.map((r) => r.rowid);
-  const scoreMap = new Map(ftsResults.map((r) => [r.rowid, r]));
-
   let sql = `
-    SELECT DISTINCT
+    SELECT
       s.id as sessionId,
       s.source,
       s.path,
@@ -496,48 +475,50 @@ export function search(
       s.name,
       s.created_at as createdAt,
       s.modified_at as modifiedAt,
-      c.id as chunkId
-    FROM chunks c
+      c.id as chunkId,
+      c.entry_id as matchedEntryId,
+      c.timestamp as matchedAt,
+      CASE
+        WHEN c.kind = 'tool_call' THEN 'tool_call'
+        WHEN c.source_type IS NOT NULL THEN c.source_type
+        ELSE c.kind
+      END as matchedType,
+      bm25(chunks_fts) as score,
+      snippet(chunks_fts, 0, '', '', '...', 32) as matchedSnippet
+    FROM chunks_fts
+    JOIN chunks c ON c.id = chunks_fts.rowid
     JOIN sessions s ON s.id = c.session_id
-    WHERE c.id IN (${rowids.map(() => "?").join(",")})
+    WHERE chunks_fts MATCH ?
   `;
-
-  const mainParams: unknown[] = [...rowids];
+  const params: unknown[] = [ftsQuery];
 
   if (cwd) {
     sql += " AND s.cwd LIKE ?";
-    mainParams.push(`${cwd}%`);
+    params.push(`${cwd}%`);
   }
-
   if (after) {
-    sql += " AND s.created_at >= ?";
-    mainParams.push(after);
+    sql += " AND s.modified_at >= ?";
+    params.push(after);
   }
-
   if (before) {
-    sql += " AND s.created_at <= ?";
-    mainParams.push(before);
+    sql += " AND s.modified_at <= ?";
+    params.push(before);
   }
-
   if (exclude && exclude.length > 0) {
     sql += ` AND s.id NOT IN (${exclude.map(() => "?").join(",")})`;
-    mainParams.push(...exclude);
+    params.push(...exclude);
   }
-
   if (toolsOnly) {
     sql += " AND c.kind = 'tool_call'";
   }
-
   if (toolName) {
     sql += " AND c.tool_name = ?";
-    mainParams.push(toolName);
+    params.push(toolName);
   }
-
   if (pathFilter) {
     sql += " AND c.kind = 'tool_call' AND c.content LIKE ?";
-    mainParams.push(`%${pathFilter}%`);
+    params.push(`%${pathFilter}%`);
   }
-
   if (status && (toolsOnly || toolName)) {
     const isErrorValue = status === "error" ? 1 : 0;
     sql += ` AND s.id IN (
@@ -545,14 +526,13 @@ export function search(
       WHERE c2.is_error = ?
       ${toolName ? "AND c2.tool_name = ?" : ""}
     )`;
-    mainParams.push(isErrorValue);
+    params.push(isErrorValue);
     if (toolName) {
-      mainParams.push(toolName);
+      params.push(toolName);
     }
   }
 
-  const mainStmt = db.prepare(sql);
-  const rows = mainStmt.all(...(mainParams as [string])) as Array<{
+  const rows = db.prepare(sql).all(...(params as [string])) as Array<{
     sessionId: string;
     source: string;
     path: string;
@@ -561,37 +541,61 @@ export function search(
     createdAt: string | null;
     modifiedAt: string | null;
     chunkId: number;
+    matchedEntryId: string | null;
+    matchedAt: string | null;
+    matchedType: string | null;
+    score: number;
+    matchedSnippet: string;
   }>;
 
-  // Group by session and get best score
   const sessionMap = new Map<string, SearchResult>();
-
   for (const row of rows) {
-    const scoreData = scoreMap.get(row.chunkId);
-    if (!scoreData) continue;
-
     const existing = sessionMap.get(row.sessionId);
-    if (!existing || scoreData.score < existing.score) {
+    if (!existing || row.score < existing.score) {
       sessionMap.set(row.sessionId, {
         sessionId: row.sessionId,
         source: row.source,
         path: row.path,
         cwd: row.cwd,
         name: row.name,
-        score: scoreData.score,
+        score: row.score,
         createdAt: row.createdAt,
         modifiedAt: row.modifiedAt,
-        matchedSnippet: scoreData.snippet,
+        matchedSnippet: row.matchedSnippet,
+        matchMode,
+        matchedType: row.matchedType,
+        matchedEntryId: row.matchedEntryId,
+        matchedAt: row.matchedAt,
       });
     }
   }
 
-  // Sort by score and limit
-  const results = Array.from(sessionMap.values())
+  return Array.from(sessionMap.values())
     .sort((a, b) => a.score - b.score)
     .slice(0, limit);
+}
 
-  return results;
+export function search(
+  db: Database,
+  query?: string,
+  options: SearchOptions = {},
+): SearchResult[] {
+  // Normalize empty query to "*" for listing all sessions with filters
+  query = query?.trim();
+  if (!query) {
+    query = "*";
+  }
+
+  // Special case: "*" means list all sessions with filters
+  if (query === "*") {
+    return listAllSessions(db, options);
+  }
+
+  const strictResults = searchFts(db, escapeFtsQuery(query), options, "all");
+  if (strictResults.length > 0 || query.trim().split(/\s+/).length <= 1) {
+    return strictResults;
+  }
+  return searchFts(db, escapeFtsAnyQuery(query), options, "any");
 }
 
 export function listSessions(
@@ -618,11 +622,11 @@ export function listSessions(
     params.push(`${escaped}%`);
   }
   if (after) {
-    sql += " AND created_at >= ?";
+    sql += " AND modified_at >= ?";
     params.push(after);
   }
   if (before) {
-    sql += " AND created_at <= ?";
+    sql += " AND modified_at <= ?";
     params.push(before);
   }
 

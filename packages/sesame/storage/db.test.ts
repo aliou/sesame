@@ -355,7 +355,7 @@ describe("Database operations", () => {
       path: "/path/to/old.jsonl",
       cwd: "/project",
       name: "Old Session",
-      created_at: "2026-01-01T10:00:00Z",
+      created_at: "2026-02-01T10:00:00Z",
       modified_at: "2026-01-01T10:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
@@ -368,7 +368,7 @@ describe("Database operations", () => {
       path: "/path/to/new.jsonl",
       cwd: "/project",
       name: "New Session",
-      created_at: "2026-02-01T10:00:00Z",
+      created_at: "2026-01-01T10:00:00Z",
       modified_at: "2026-02-01T10:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
@@ -708,7 +708,7 @@ describe("Database operations", () => {
       path: "/path/to/old.jsonl",
       cwd: "/home/user/project-a",
       name: "Old Session",
-      created_at: "2026-01-01T10:00:00Z",
+      created_at: "2026-02-01T10:00:00Z",
       modified_at: "2026-01-01T10:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
@@ -721,7 +721,7 @@ describe("Database operations", () => {
       path: "/path/to/new.jsonl",
       cwd: "/home/user/project-b",
       name: "New Session",
-      created_at: "2026-02-01T10:00:00Z",
+      created_at: "2026-01-01T10:00:00Z",
       modified_at: "2026-02-01T10:00:00Z",
       message_count: 1,
       file_mtime: Date.now(),
@@ -1033,6 +1033,7 @@ describe("Database operations", () => {
 
     // Whitespace-only query also normalizes to "*"
     expect(() => search(db, " ")).not.toThrow();
+    expect(() => search(db, " * ")).not.toThrow();
   });
 
   describe("listSessions and getSession", () => {
@@ -1110,20 +1111,23 @@ describe("Database operations", () => {
       ]);
     });
 
-    test("listSessions filters by after and before", () => {
+    test("listSessions filters by modified_at after and before", () => {
       db = openDatabase(dbPath);
 
       const sessionOld = makeSession({
         id: "session-old",
-        created_at: "2026-01-01T10:00:00Z",
+        created_at: "2026-02-01T10:00:00Z",
+        modified_at: "2026-01-01T10:00:00Z",
       });
       const sessionMid = makeSession({
         id: "session-mid",
         created_at: "2026-01-15T10:00:00Z",
+        modified_at: "2026-01-15T10:00:00Z",
       });
       const sessionNew = makeSession({
         id: "session-new",
-        created_at: "2026-02-01T10:00:00Z",
+        created_at: "2026-01-01T10:00:00Z",
+        modified_at: "2026-02-01T10:00:00Z",
       });
 
       insertSession(db, sessionOld, []);
@@ -1652,5 +1656,190 @@ describe("Database operations", () => {
     });
     expect(successResults).toHaveLength(1);
     expect(successResults[0].sessionId).toBe("fts-success");
+  });
+
+  test("falls back to any-term matching only after filtered all-term matches are empty", () => {
+    db = openDatabase(dbPath);
+
+    insertSession(
+      db,
+      {
+        id: "all-match",
+        source: "pi",
+        path: "/path/to/all.jsonl",
+        cwd: "/project",
+        name: "All match",
+        created_at: "2026-01-01T10:00:00Z",
+        modified_at: "2026-01-01T10:00:00Z",
+        message_count: 1,
+        file_mtime: Date.now(),
+        parent_session_id: null,
+      },
+      [
+        {
+          id: 0,
+          session_id: "all-match",
+          kind: "message",
+          role: "user",
+          tool_name: null,
+          seq: 0,
+          content: "alpha beta",
+          is_error: null,
+          entry_id: "all-entry",
+          parent_entry_id: null,
+          timestamp: "2026-01-01T10:00:00Z",
+          source_type: "message",
+        },
+      ],
+    );
+    insertSession(
+      db,
+      {
+        id: "partial-match",
+        source: "pi",
+        path: "/path/to/partial.jsonl",
+        cwd: "/project",
+        name: "Partial match",
+        created_at: "2026-01-01T10:00:00Z",
+        modified_at: "2026-01-01T10:00:00Z",
+        message_count: 1,
+        file_mtime: Date.now(),
+        parent_session_id: null,
+      },
+      [
+        {
+          id: 0,
+          session_id: "partial-match",
+          kind: "message",
+          role: "user",
+          tool_name: null,
+          seq: 0,
+          content: "alpha only",
+          is_error: null,
+          entry_id: "partial-entry",
+          parent_entry_id: null,
+          timestamp: "2026-01-01T10:00:00Z",
+          source_type: "message",
+        },
+      ],
+    );
+
+    const strict = search(db, "alpha beta");
+    expect(strict).toHaveLength(1);
+    expect(strict[0].sessionId).toBe("all-match");
+    expect(strict[0].matchMode).toBe("all");
+
+    const fallback = search(db, "alpha beta", { exclude: ["all-match"] });
+    expect(fallback).toHaveLength(1);
+    expect(fallback[0].sessionId).toBe("partial-match");
+    expect(fallback[0].matchMode).toBe("any");
+  });
+
+  test("returns match provenance and browse null provenance", () => {
+    db = openDatabase(dbPath);
+
+    insertSession(
+      db,
+      {
+        id: "metadata-session",
+        source: "pi",
+        path: "/path/to/metadata.jsonl",
+        cwd: "/project",
+        name: "Title",
+        created_at: "2026-01-01T10:00:00Z",
+        modified_at: "2026-02-01T10:00:00Z",
+        message_count: 0,
+        file_mtime: Date.now(),
+        parent_session_id: null,
+      },
+      [
+        {
+          id: 0,
+          session_id: "metadata-session",
+          kind: "metadata",
+          role: null,
+          tool_name: null,
+          seq: 0,
+          content: "checkpoint: deploy checkpoint",
+          is_error: null,
+          entry_id: "checkpoint-entry",
+          parent_entry_id: "parent-entry",
+          timestamp: "2026-01-15T10:00:00Z",
+          source_type: "label",
+        },
+        {
+          id: 0,
+          session_id: "metadata-session",
+          kind: "tool_call",
+          role: null,
+          tool_name: "Bash",
+          seq: 1,
+          content: "tool: Bash\ncommand: deploy application",
+          is_error: null,
+          entry_id: "tool-entry",
+          parent_entry_id: null,
+          timestamp: "2026-01-16T10:00:00Z",
+          source_type: "message",
+        },
+      ],
+    );
+
+    const matched = search(db, "deploy checkpoint");
+    expect(matched[0]).toMatchObject({
+      matchMode: "all",
+      matchedType: "label",
+      matchedEntryId: "checkpoint-entry",
+      matchedAt: "2026-01-15T10:00:00Z",
+    });
+
+    expect(search(db, "deploy application")[0]).toMatchObject({
+      matchedType: "tool_call",
+      matchedEntryId: "tool-entry",
+    });
+
+    const browse = search(db);
+    expect(browse[0]).toMatchObject({
+      matchMode: "browse",
+      matchedType: null,
+      matchedEntryId: null,
+      matchedAt: null,
+    });
+  });
+
+  test("searches large FTS result sets without a parameter-limit failure", () => {
+    db = openDatabase(dbPath);
+
+    const session: StoredSession = {
+      id: "many-chunks",
+      source: "pi",
+      path: "/path/to/many.jsonl",
+      cwd: "/project",
+      name: "Many chunks",
+      created_at: "2026-01-01T10:00:00Z",
+      modified_at: "2026-01-01T10:00:00Z",
+      message_count: 1100,
+      file_mtime: Date.now(),
+      parent_session_id: null,
+    };
+    const chunks = Array.from(
+      { length: 1100 },
+      (_, seq): StoredChunk => ({
+        id: 0,
+        session_id: "many-chunks",
+        kind: "message",
+        role: "user",
+        tool_name: null,
+        seq,
+        content: `common term ${seq}`,
+        is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: "message",
+      }),
+    );
+    insertSession(db, session, chunks);
+
+    expect(search(db, "common")).toHaveLength(1);
   });
 });
