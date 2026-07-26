@@ -25,15 +25,14 @@ function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
-  } catch (error) {
-    if (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      (error as { code?: string }).code === "EPERM"
-    ) {
-      return true;
-    }
+  } catch {
+    // ESRCH: no such process -> dead.
+    // EPERM: the process exists but we cannot signal it, which means it is
+    // owned by another user. Sesame processes always run as the current
+    // user, so a lock whose pid yields EPERM cannot be our watch process;
+    // the pid was reused by an unrelated system process. Treat it as dead
+    // so the stale lock is cleared instead of blocking forever.
+    // Any other error is also treated as the process being unreachable.
     return false;
   }
 }

@@ -65,4 +65,36 @@ describe("acquireIndexLock", () => {
 
     lock.release();
   });
+
+  test("removes stale lock when recorded pid was reused by a non-owned process", () => {
+    // Simulates a dead watch whose pid was later reused by a system process
+    // owned by another user (process.kill yields EPERM instead of ESRCH).
+    const killSpy = vi.spyOn(process, "kill").mockImplementation(() => {
+      const error = new Error("Operation not permitted");
+      (error as NodeJS.ErrnoException).code = "EPERM";
+      throw error;
+    });
+
+    fs.writeFileSync(
+      "/tmp/sesame-index-lock/index.lock",
+      JSON.stringify({
+        pid: 847,
+        holder: "watch",
+        startedAt: "2026-07-24T07:29:28.143Z",
+      }),
+      "utf8",
+    );
+
+    const lock = acquireIndexLock("/tmp/sesame-index-lock", "watch");
+    const lockFile = JSON.parse(fs.readFileSync(lock.path, "utf8")) as {
+      pid?: number;
+      holder?: string;
+    };
+
+    expect(lockFile.pid).toBe(process.pid);
+    expect(lockFile.holder).toBe("watch");
+
+    lock.release();
+    killSpy.mockRestore();
+  });
 });
