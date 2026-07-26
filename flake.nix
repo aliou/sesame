@@ -8,7 +8,7 @@
 
   outputs = { self, nixpkgs, flake-utils }:
     let
-      version = "0.11.0";
+      version = "0.11.1";
 
       binaries = {
         "aarch64-darwin" = {
