@@ -8,20 +8,20 @@
 
   outputs = { self, nixpkgs, flake-utils }:
     let
-      version = "0.11.1";
+      version = "0.12.0";
 
       binaries = {
         "aarch64-darwin" = {
           url = "https://github.com/aliou/sesame/releases/download/@aliou/sesame-cli@${version}/sesame-darwin-arm64";
-          hash = "sha256-l4uwdpaDOXg8DLnEPZ7HHEtVOzl4pgfQK35zjoSFqjk="; # darwin
+          hash = "sha256-5yadKPm5plWXM/jNYp8lKBv+FgEb6Vu/SI/1CKVV5nY="; # darwin
         };
         "aarch64-linux" = {
           url = "https://github.com/aliou/sesame/releases/download/@aliou/sesame-cli@${version}/sesame-linux-arm64";
-          hash = "sha256-W51YAVQRhrScipckT+xLB2RqCzvH4t6gEv6/JDaCCSc="; # linux-arm64
+          hash = "sha256-nU5YLZOiJuAkmUUKLHryKL4ZgIeYtjZ64bAn43begHs="; # linux-arm64
         };
         "x86_64-linux" = {
           url = "https://github.com/aliou/sesame/releases/download/@aliou/sesame-cli@${version}/sesame-linux-x64";
-          hash = "sha256-h2UGiIYbyAq8994ZS8arDqZ8k7tTnM+GR1urHDQEZsI="; # linux-x64
+          hash = "sha256-plyxzzAPvqYwCq77PVT+nJIyOuscMFWYdd+dAPgqw2o="; # linux-x64
         };
       };
 
