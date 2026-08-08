@@ -17,9 +17,10 @@ Runtime requirement: Node.js 26 or newer.
 From `@aliou/sesame`:
 
 - Database/storage: `openDatabase`, `search`, `insertSession`, `deleteSession`, `dropAll`, `getSession`, `getSessionMtime`, `getStats`, `listSessions`, `setMetadata`
+- Skills: `getSessionSkills`, `getSkillsForSessions`, `listIndexedSkills`, `detectSkills`, `skillNameFromPath`
 - Indexer/parser: `indexSessions`, `PiParser`
 - Config/helpers: `loadConfig`, `expandPath`, `getXDGPaths`, `parseRelativeDate`, `acquireIndexLock`
-- Types: `Database`, `SearchOptions`, `SearchResult`, `ListSessionsOptions`, `StoredSession`, `StoredChunk`, `ParsedSession`, `ToolCall`, `Turn`, `IndexResult`, `IndexLockHandle`, `SesameConfig`
+- Types: `Database`, `SearchOptions`, `SearchResult`, `ListSessionsOptions`, `ListSkillsOptions`, `SkillSummary`, `SkillUsage`, `SkillUsageSource`, `StoredSession`, `StoredChunk`, `StoredSkill`, `ParsedSession`, `ToolCall`, `Turn`, `IndexResult`, `IndexLockHandle`, `SesameConfig`
 
 `getMetadata` exists internally but is not exported from the package entry point.
 
@@ -83,6 +84,8 @@ const results = search(db, "package exports", {
   toolsOnly: true,
   toolName: "write",
   pathFilter: "package.json",
+  skill: "vitest",
+  skillPath: "/skill-library/",
   exclude: ["session-id-to-skip"],
   status: "success",
 });
@@ -96,6 +99,8 @@ const results = search(db, "package exports", {
 - `toolsOnly`: restrict matches to `tool_call` chunks
 - `toolName`: restrict matches to one tool name
 - `pathFilter`: restrict matches to tool-call chunks whose formatted content contains the string
+- `skill`: only sessions that used this skill, matched on the exact skill directory name, case-insensitive
+- `skillPath`: only sessions that used a skill whose `SKILL.md` path contains this literal substring; set with `skill` to require both on the same skill
 - `exclude`: session ids to omit
 - `status`: `"success" | "error"`; applies only when `toolsOnly` or `toolName` is set
 - `json`: carried for CLI option plumbing; storage results are always JavaScript objects
@@ -132,12 +137,47 @@ Use `listSessions()` when you need session metadata without FTS:
 const sessions = listSessions(db, {
   cwd: "/Users/me/code",
   after: "2026-05-01",
+  skill: "vitest",
   limit: 50,
   offset: 0,
 });
 ```
 
-`limit` is clamped to `1..500`; `offset` is clamped to `>= 0`.
+`limit` is clamped to `1..500`; `offset` is clamped to `>= 0`. `skill` and `skillPath` behave the same as in `SearchOptions`.
+
+## Skills
+
+Sesame records which skills a session used, either because the `skill-autocomplete` hook injected a `<skill>` block (`source: "invocation"`) or because the agent read a `SKILL.md` file with a read tool (`source: "read"`).
+
+```ts
+import {
+  getSessionSkills,
+  getSkillsForSessions,
+  listIndexedSkills,
+  search,
+} from "@aliou/sesame";
+
+// Sessions that used a skill
+const results = search(db, "*", { skill: "vitest", after: "2026-05-01" });
+
+// Skills used by one session
+const skills = getSessionSkills(db, results[0].sessionId);
+
+// Skills for many sessions at once, keyed by session id
+const bySession = getSkillsForSessions(
+  db,
+  results.map((r) => r.sessionId),
+);
+
+// Skill leaderboard across the index
+const summary = listIndexedSkills(db, { source: "invocation", limit: 20 });
+```
+
+`StoredSkill` is `{ session_id, name, path, source }` with `path` nullable. `listIndexedSkills()` returns `{ name, sessionCount, sources, paths }` grouped by skill name, ordered by `sessionCount DESC, name ASC`; its `limit` is clamped to `1..1000`.
+
+To derive skill usage without the database, call `detectSkills(parsedSession.turns)`, or read `ParsedSession.skills` directly from `PiParser.parse()`.
+
+Upgrading an existing index adds the `session_skills` table and invalidates stored mtimes, so a plain `sesame index` backfills skills on the next run.
 
 Run `sesame index --full` after upgrading to populate searchable titles/checkpoints and remove existing discovery-result bodies from the index.
 

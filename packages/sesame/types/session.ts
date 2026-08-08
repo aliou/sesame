@@ -38,6 +38,20 @@ export interface Turn {
   sourceType?: string;
   /** Custom type identifier for custom_message entries */
   customType?: string;
+  /** Structured details attached to custom_message entries */
+  details?: Record<string, unknown>;
+}
+
+/** How a skill ended up in a session. */
+export type SkillUsageSource = "invocation" | "read";
+
+/** A skill referenced by a session, detected from invocations or SKILL.md reads. */
+export interface SkillUsage {
+  /** Skill directory name, e.g. "vitest". */
+  name: string;
+  /** Absolute path to SKILL.md, when known. */
+  path: string | null;
+  source: SkillUsageSource;
 }
 
 /** Searchable session metadata with the Pi entry that defines it. */
@@ -62,6 +76,8 @@ export interface ParsedSession {
   turns: Turn[];
   /** Current title and active checkpoints resolved from Pi metadata entries. */
   metadata: SessionMetadata[];
+  /** Skills used in this session (injected skill blocks and SKILL.md reads). */
+  skills: SkillUsage[];
   /** ID of parent session (if this session was forked from another) */
   parentSessionId?: string;
 }

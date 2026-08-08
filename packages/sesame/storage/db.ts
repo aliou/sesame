@@ -46,6 +46,36 @@ export interface StoredChunk {
   source_type: string | null;
 }
 
+export interface StoredSkill {
+  session_id: string;
+  /** Skill directory name, e.g. "vitest". */
+  name: string;
+  /** Absolute path to SKILL.md, when known. */
+  path: string | null;
+  /** `invocation` (injected skill block) or `read` (SKILL.md read via a tool). */
+  source: string;
+}
+
+/** A skill aggregated across the indexed sessions that used it. */
+export interface SkillSummary {
+  name: string;
+  /** Number of distinct sessions that used the skill. */
+  sessionCount: number;
+  /** Usage kinds seen for this skill: `invocation`, `read`, or both. */
+  sources: string[];
+  /** Known SKILL.md paths for this skill, most used first. */
+  paths: string[];
+}
+
+export interface ListSkillsOptions {
+  cwd?: string;
+  after?: string;
+  before?: string;
+  /** Restrict to one usage source. */
+  source?: "invocation" | "read";
+  limit?: number; // default 100
+}
+
 export interface SearchResult {
   sessionId: string;
   source: string;
@@ -66,6 +96,10 @@ export interface ListSessionsOptions {
   cwd?: string;
   after?: string; // ISO date string
   before?: string; // ISO date string
+  /** Only sessions that used this skill (exact name, case-insensitive). */
+  skill?: string;
+  /** Only sessions that used a skill whose SKILL.md path contains this substring. */
+  skillPath?: string;
   limit?: number; // default 50
   offset?: number; // default 0
 }
@@ -78,6 +112,10 @@ export interface SearchOptions {
   toolsOnly?: boolean;
   toolName?: string;
   pathFilter?: string;
+  /** Only sessions that used this skill (exact name, case-insensitive). */
+  skill?: string;
+  /** Only sessions that used a skill whose SKILL.md path contains this substring. */
+  skillPath?: string;
   exclude?: string[];
   json?: boolean;
   status?: "success" | "error";
@@ -134,6 +172,13 @@ CREATE TABLE IF NOT EXISTS chunks (
   source_type TEXT
 );
 
+CREATE TABLE IF NOT EXISTS session_skills (
+  session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  path TEXT,
+  source TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS metadata (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL,
@@ -163,6 +208,9 @@ END;
 CREATE INDEX IF NOT EXISTS idx_chunks_session ON chunks(session_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_kind ON chunks(kind);
 CREATE INDEX IF NOT EXISTS idx_chunks_tool ON chunks(tool_name);
+CREATE INDEX IF NOT EXISTS idx_session_skills_session ON session_skills(session_id);
+CREATE INDEX IF NOT EXISTS idx_session_skills_name ON session_skills(name);
+CREATE INDEX IF NOT EXISTS idx_session_skills_path ON session_skills(path);
 `;
 
 const nodeSqlite = require("node:sqlite") as {
@@ -262,10 +310,49 @@ export function deleteSession(db: Database, sessionId: string): void {
   stmt.run(sessionId);
 }
 
+/** Escape a literal so it can be used inside a `LIKE ... ESCAPE '\'` pattern. */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
+
+/**
+ * Build the SQL fragment and params for the skill filters.
+ *
+ * Uses a single EXISTS rather than a join so the filter composes with the
+ * existing chunk joins without multiplying rows. Both `skill` and `skillPath`
+ * constrain the *same* `session_skills` row, so combining them means "this
+ * skill, loaded from this path".
+ */
+function skillFilterClause(
+  options: Pick<SearchOptions, "skill" | "skillPath">,
+  sessionAlias: string,
+): { sql: string; params: unknown[] } {
+  const predicates: string[] = [];
+  const params: unknown[] = [];
+
+  if (options.skill) {
+    predicates.push("sk.name = ? COLLATE NOCASE");
+    params.push(options.skill);
+  }
+
+  if (options.skillPath) {
+    predicates.push("sk.path LIKE ? ESCAPE '\\'");
+    params.push(`%${escapeLike(options.skillPath)}%`);
+  }
+
+  if (predicates.length === 0) return { sql: "", params };
+
+  return {
+    sql: ` AND EXISTS (SELECT 1 FROM session_skills sk WHERE sk.session_id = ${sessionAlias}.id AND ${predicates.join(" AND ")})`,
+    params,
+  };
+}
+
 export function insertSession(
   db: Database,
   session: StoredSession,
   chunks: StoredChunk[],
+  skills: StoredSkill[] = [],
 ): void {
   const insertSessionStmt = db.prepare(
     `INSERT INTO sessions (id, source, path, cwd, name, created_at, modified_at, message_count, file_mtime, parent_session_id)
@@ -277,8 +364,19 @@ export function insertSession(
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
 
+  const insertSkillStmt = db.prepare(
+    `INSERT INTO session_skills (session_id, name, path, source)
+     VALUES (?, ?, ?, ?)`,
+  );
+
+  // Replace any existing row for this session so a re-index never leaves the
+  // database with a deleted session and no replacement.
+  const deleteSessionStmt = db.prepare("DELETE FROM sessions WHERE id = ?");
+
   db.exec("BEGIN");
   try {
+    deleteSessionStmt.run(session.id);
+
     insertSessionStmt.run(
       session.id,
       session.source,
@@ -305,6 +403,15 @@ export function insertSession(
         chunk.parent_entry_id,
         chunk.timestamp,
         chunk.source_type,
+      );
+    }
+
+    for (const skill of skills) {
+      insertSkillStmt.run(
+        skill.session_id,
+        skill.name,
+        skill.path,
+        skill.source,
       );
     }
 
@@ -386,6 +493,10 @@ function listAllSessions(db: Database, options: SearchOptions): SearchResult[] {
     sql += ` AND s.id NOT IN (${exclude.map(() => "?").join(",")})`;
     params.push(...exclude);
   }
+
+  const skillFilter = skillFilterClause(options, "s");
+  sql += skillFilter.sql;
+  params.push(...skillFilter.params);
 
   if (needsChunkJoin) {
     if (toolsOnly) {
@@ -508,6 +619,9 @@ function searchFts(
     sql += ` AND s.id NOT IN (${exclude.map(() => "?").join(",")})`;
     params.push(...exclude);
   }
+  const skillFilter = skillFilterClause(options, "s");
+  sql += skillFilter.sql;
+  params.push(...skillFilter.params);
   if (toolsOnly) {
     sql += " AND c.kind = 'tool_call'";
   }
@@ -613,24 +727,27 @@ export function listSessions(
   const limit = Math.max(1, Math.min(rawLimit, 500));
   const offset = Math.max(0, rawOffset);
 
-  let sql = "SELECT * FROM sessions WHERE 1=1";
+  let sql = "SELECT s.* FROM sessions s WHERE 1=1";
   const params: unknown[] = [];
 
   if (cwd) {
-    const escaped = cwd.replace(/[%_]/g, "\\$&");
-    sql += " AND cwd LIKE ? ESCAPE '\\'";
-    params.push(`${escaped}%`);
+    sql += " AND s.cwd LIKE ? ESCAPE '\\'";
+    params.push(`${escapeLike(cwd)}%`);
   }
   if (after) {
-    sql += " AND modified_at >= ?";
+    sql += " AND s.modified_at >= ?";
     params.push(after);
   }
   if (before) {
-    sql += " AND modified_at <= ?";
+    sql += " AND s.modified_at <= ?";
     params.push(before);
   }
 
-  sql += " ORDER BY modified_at DESC LIMIT ? OFFSET ?";
+  const skillFilter = skillFilterClause(options, "s");
+  sql += skillFilter.sql;
+  params.push(...skillFilter.params);
+
+  sql += " ORDER BY s.modified_at DESC LIMIT ? OFFSET ?";
   params.push(limit, offset);
 
   const stmt = db.prepare(sql);
@@ -644,6 +761,172 @@ export function getSession(
   const stmt = db.prepare("SELECT * FROM sessions WHERE id = ?");
   const row = stmt.get(sessionId) as StoredSession | undefined;
   return row ?? null;
+}
+
+/** Skills used by a single session, ordered by name. */
+export function getSessionSkills(
+  db: Database,
+  sessionId: string,
+): StoredSkill[] {
+  const stmt = db.prepare(
+    `SELECT session_id, name, path, source FROM session_skills
+     WHERE session_id = ?
+     ORDER BY name, source`,
+  );
+  return stmt.all(sessionId) as StoredSkill[];
+}
+
+/** Skills used by several sessions at once, keyed by session ID. */
+export function getSkillsForSessions(
+  db: Database,
+  sessionIds: string[],
+): Map<string, StoredSkill[]> {
+  const bySession = new Map<string, StoredSkill[]>();
+  if (sessionIds.length === 0) return bySession;
+
+  const placeholders = sessionIds.map(() => "?").join(",");
+  const stmt = db.prepare(
+    `SELECT session_id, name, path, source FROM session_skills
+     WHERE session_id IN (${placeholders})
+     ORDER BY name, source`,
+  );
+  const rows = stmt.all(...(sessionIds as [string])) as StoredSkill[];
+
+  for (const row of rows) {
+    const existing = bySession.get(row.session_id);
+    if (existing) {
+      existing.push(row);
+    } else {
+      bySession.set(row.session_id, [row]);
+    }
+  }
+
+  return bySession;
+}
+
+/**
+ * List indexed skills with the number of sessions that used each one,
+ * most used first.
+ */
+export function listIndexedSkills(
+  db: Database,
+  options: ListSkillsOptions = {},
+): SkillSummary[] {
+  const limit = Math.max(1, Math.min(options.limit ?? 100, 1000));
+
+  let sql = `
+    SELECT
+      sk.name as name,
+      COUNT(DISTINCT sk.session_id) as sessionCount,
+      GROUP_CONCAT(DISTINCT sk.source) as sources
+    FROM session_skills sk
+    JOIN sessions s ON s.id = sk.session_id
+    WHERE 1=1
+  `;
+  const params: unknown[] = [];
+
+  const scope = skillScopeClause(options);
+  sql += scope.sql;
+  params.push(...scope.params);
+
+  sql += `
+    GROUP BY sk.name
+    ORDER BY sessionCount DESC, sk.name ASC
+    LIMIT ?
+  `;
+  params.push(limit);
+
+  const rows = db.prepare(sql).all(...(params as [string])) as Array<{
+    name: string;
+    sessionCount: number;
+    sources: string | null;
+  }>;
+
+  const pathsByName = skillPathsByName(
+    db,
+    rows.map((row) => row.name),
+    options,
+  );
+
+  return rows.map((row) => ({
+    name: row.name,
+    sessionCount: row.sessionCount,
+    sources: (row.sources ?? "").split(",").filter(Boolean).sort(),
+    paths: pathsByName.get(row.name) ?? [],
+  }));
+}
+
+/**
+ * Session-scope predicates shared by the skill aggregate and path queries,
+ * so both see exactly the same set of `session_skills` rows.
+ *
+ * Expects `session_skills sk` joined to `sessions s`.
+ */
+function skillScopeClause(options: ListSkillsOptions): {
+  sql: string;
+  params: unknown[];
+} {
+  const { cwd, after, before, source } = options;
+  let sql = "";
+  const params: unknown[] = [];
+
+  if (cwd) {
+    sql += " AND s.cwd LIKE ? ESCAPE '\\'";
+    params.push(`${escapeLike(cwd)}%`);
+  }
+  if (after) {
+    sql += " AND s.modified_at >= ?";
+    params.push(after);
+  }
+  if (before) {
+    sql += " AND s.modified_at <= ?";
+    params.push(before);
+  }
+  if (source) {
+    sql += " AND sk.source = ?";
+    params.push(source);
+  }
+
+  return { sql, params };
+}
+
+/** Distinct SKILL.md paths per skill name, most used first. */
+function skillPathsByName(
+  db: Database,
+  names: string[],
+  options: ListSkillsOptions,
+): Map<string, string[]> {
+  const byName = new Map<string, string[]>();
+  if (names.length === 0) return byName;
+
+  const placeholders = names.map(() => "?").join(",");
+  const scope = skillScopeClause(options);
+  const sql = `
+    SELECT sk.name as name, sk.path as path, COUNT(DISTINCT sk.session_id) as sessionCount
+    FROM session_skills sk
+    JOIN sessions s ON s.id = sk.session_id
+    WHERE sk.name IN (${placeholders}) AND sk.path IS NOT NULL
+    ${scope.sql}
+    GROUP BY sk.name, sk.path
+    ORDER BY sessionCount DESC, sk.path ASC
+  `;
+  const params: unknown[] = [...names, ...scope.params];
+
+  const rows = db.prepare(sql).all(...(params as [string])) as Array<{
+    name: string;
+    path: string;
+  }>;
+
+  for (const row of rows) {
+    const existing = byName.get(row.name);
+    if (existing) {
+      existing.push(row.path);
+    } else {
+      byName.set(row.name, [row.path]);
+    }
+  }
+
+  return byName;
 }
 
 export function getStats(db: Database): {
@@ -703,10 +986,14 @@ export function dropAll(db: Database): void {
   db.exec("DROP INDEX IF EXISTS idx_chunks_session");
   db.exec("DROP INDEX IF EXISTS idx_chunks_kind");
   db.exec("DROP INDEX IF EXISTS idx_chunks_tool");
+  db.exec("DROP INDEX IF EXISTS idx_session_skills_session");
+  db.exec("DROP INDEX IF EXISTS idx_session_skills_name");
+  db.exec("DROP INDEX IF EXISTS idx_session_skills_path");
 
   // Drop tables (FTS table first to avoid foreign key issues)
   db.exec("DROP TABLE IF EXISTS chunks_fts");
   db.exec("DROP TABLE IF EXISTS chunks");
+  db.exec("DROP TABLE IF EXISTS session_skills");
   db.exec("DROP TABLE IF EXISTS sessions");
   db.exec("DROP TABLE IF EXISTS metadata");
   db.exec("DROP TABLE IF EXISTS schema_migrations");

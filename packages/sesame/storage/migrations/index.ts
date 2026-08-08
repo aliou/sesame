@@ -2,6 +2,7 @@ import type { Database } from "../db";
 import addIsError from "./001-add-is-error";
 import addMetadata from "./002-add-metadata";
 import addTreeFields from "./003-add-tree-fields";
+import addSessionSkills from "./004-add-session-skills";
 
 export interface Migration {
   id: number;
@@ -19,4 +20,9 @@ export interface Migration {
  *   definitions so that fresh databases are created correctly without
  *   running migrations.
  */
-export const migrations: Migration[] = [addIsError, addMetadata, addTreeFields];
+export const migrations: Migration[] = [
+  addIsError,
+  addMetadata,
+  addTreeFields,
+  addSessionSkills,
+];

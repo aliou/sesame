@@ -6,6 +6,7 @@
 sesame index
 sesame index --full
 sesame search [query] [options]
+sesame skills [options]
 sesame status
 sesame watch
 sesame watch --interval <seconds>
@@ -57,6 +58,8 @@ Options:
 - `--tools`: search only assistant tool-call chunks
 - `--tool <name>`: search a specific tool name
 - `--path <file>`: restrict matches to tool-call chunks whose formatted content mentions a path
+- `--skill <name>`: only sessions that used this skill (exact directory name, case-insensitive)
+- `--skill-path <substring>`: only sessions that used a skill whose `SKILL.md` path contains the substring; combining it with `--skill` requires both to match the same skill
 - `--exclude <id>`: exclude a session id; repeatable
 - `--json`: output JSON
 
@@ -89,6 +92,8 @@ sesame search "publish workflow" --after 2w --limit 5
 sesame search "package.json exports" --tools --tool write
 sesame search --cwd /Users/me/code --exclude abc --exclude def
 sesame search "deploy" --json
+sesame search "*" --skill vitest
+sesame search "flaky test" --skill-path /skill-library/
 ```
 
 JSON output has this shape:
@@ -111,7 +116,44 @@ JSON output has this shape:
       "matchMode": "all",
       "matchedType": "message",
       "matchedEntryId": "...",
-      "matchedAt": "2026-05-08T12:00:00.000Z"
+      "matchedAt": "2026-05-08T12:00:00.000Z",
+      "skills": ["vitest"]
+    }
+  ]
+}
+```
+
+## `sesame skills`
+
+Lists skills used across indexed sessions, grouped by skill name and ordered by session count. Useful for finding the exact name to pass to `sesame search --skill`.
+
+Options:
+
+- `--cwd <path>`: only count sessions whose `cwd` starts with this path
+- `--after <date>` / `--before <date>`: same date handling as `search`
+- `--source <kind>`: `invocation` (injected skill block) or `read` (`SKILL.md` read via a tool)
+- `--limit <n>`: max rows (default: 100, capped at 1000)
+- `--json`: output JSON
+
+Examples:
+
+```bash
+sesame skills
+sesame skills --after 1m --source invocation
+sesame skills --cwd /Users/me/code --json
+```
+
+JSON output:
+
+```json
+{
+  "skillCount": 1,
+  "skills": [
+    {
+      "name": "vitest",
+      "sessionCount": 9,
+      "sources": ["invocation", "read"],
+      "paths": ["/Users/me/skills/vitest/SKILL.md"]
     }
   ]
 }

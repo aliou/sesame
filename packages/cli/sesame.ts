@@ -6,12 +6,14 @@
 
 import indexCommand from "./commands/index-cmd";
 import searchCommand from "./commands/search-cmd";
+import skillsCommand from "./commands/skills-cmd";
 import statusCommand from "./commands/status-cmd";
 import watchCommand from "./commands/watch-cmd";
 
 const commands: Record<string, (args: string[]) => Promise<void>> = {
   index: indexCommand,
   search: searchCommand,
+  skills: skillsCommand,
   status: statusCommand,
   watch: watchCommand,
   help: async (_args: string[]) => {
@@ -30,6 +32,7 @@ Commands:
   index              Index session files (incremental)
   index --full       Drop and rebuild index
   search [query]     Search sessions or browse recent sessions
+  skills             List skills used across indexed sessions
   status             Show index statistics
   watch              Watch session files and index on change
   watch --interval <seconds>  Poll-based re-indexing at fixed interval
@@ -42,7 +45,17 @@ Search options:
   --tools            Search only tool call chunks
   --tool <name>      Search specific tool type
   --path <file>      Find sessions that touched a file
+  --skill <name>     Find sessions that used a skill (exact name)
+  --skill-path <s>   Find sessions that used a skill whose SKILL.md path contains <s>
   --exclude <id>     Exclude session ID (repeatable)
+  --json             Output as JSON
+
+Skills options:
+  --cwd <path>       Filter by project directory
+  --after <date>     Filter sessions after date
+  --before <date>    Filter sessions before date
+  --source <kind>    Filter by usage kind: invocation | read
+  --limit <n>        Max results (default: 100)
   --json             Output as JSON
 `);
 }

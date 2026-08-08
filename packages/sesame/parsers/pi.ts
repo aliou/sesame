@@ -11,6 +11,7 @@ import type {
   Turn,
 } from "../types/session";
 import { readFirstLine } from "../utils/io";
+import { detectSkills } from "./detect-skills";
 
 interface SessionHeader {
   type: "session";
@@ -227,6 +228,12 @@ function extractTextContent(content: string | ContentBlock[]): string {
  * Extract session ID from a Pi session file path.
  * Pi session filenames contain the UUID: 2026-02-23T08-52-01-947Z_34f5d893-8206-4593-a056-9a9093076a17.jsonl
  */
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
 function extractSessionIdFromPath(path: string): string | undefined {
   const filename = basename(path, ".jsonl");
   const underscoreIndex = filename.lastIndexOf("_");
@@ -416,6 +423,7 @@ export class PiParser {
               timestamp: customMsg.timestamp,
               sourceType: "custom_message",
               customType: customMsg.customType,
+              details: asRecord(customMsg.details),
             });
             break;
           }
@@ -512,6 +520,7 @@ export class PiParser {
       modifiedAt,
       turns,
       metadata,
+      skills: detectSkills(turns),
       parentSessionId,
     };
   }

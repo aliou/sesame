@@ -7,6 +7,7 @@ Indexing converts Pi JSONL session files into normalized SQLite records:
 - `sessions`: one row per session, with metadata, source path, cwd, timestamps, mtime, and parent session id
 - `chunks`: searchable units derived from messages, assistant tool calls, titles, and checkpoints
 - `chunks_fts`: external-content FTS5 table over `chunks.content`
+- `session_skills`: one row per skill a session used, for skill filtering
 - `metadata`: key/value state such as `last_sync_at`
 - `schema_migrations`: applied migration tracking
 
@@ -16,7 +17,7 @@ Flow:
 2. Expand `~` in configured paths.
 3. Scan each Pi session root.
 4. Parse candidate `.jsonl` files with `PiParser`.
-5. Build `message`, `tool_call`, and metadata chunks.
+5. Build `message`, `tool_call`, and metadata chunks, plus `session_skills` rows.
 6. Replace changed sessions with delete + insert in one transaction.
 7. Let SQL triggers keep `chunks_fts` synchronized.
 8. Update `metadata.last_sync_at` when the run has changes and zero errors.
@@ -79,6 +80,8 @@ This keeps indexing fast for large session directories while keeping FTS state c
 - `custom_message` entries as searchable system turns prefixed with `[customType]`
 - `compaction` summaries
 - `branch_summary` summaries
+- `custom_message.details`, kept as `Turn.details` so structured hook payloads stay usable
+- skill usage, derived from turns (see below) and returned as `ParsedSession.skills`
 
 Skipped entries:
 
@@ -131,6 +134,15 @@ The final session title and each active checkpoint are searchable metadata chunk
 
 Checkpoint chunks retain the labeled target's `entry_id`, parent entry id, and timestamp.
 
+### Skill rows
+
+`packages/sesame/parsers/detect-skills.ts` derives skill usage from a session's turns and writes it to `session_skills`. Two signals are recognized:
+
+- `source = "invocation"`: a `custom_message` with `customType: "skill-invocation"`, produced by the `skill-autocomplete` hook when a `?skill-name` reference is expanded. Name and path come from the entry's `details`, falling back to the `<skill name="..." location="...">` opening tag in the content.
+- `source = "read"`: a read tool call (`read`, `read_file`, `view`, `cat`) whose path argument points at a `SKILL.md` file. This covers skills the agent loads from the system prompt listing. The skill name is the containing directory, so `/skills/vitest/SKILL.md` yields `vitest`.
+
+Rows are de-duplicated on name + path + source, so a skill both injected and read produces two rows. Reads of other files inside a skill directory are ignored.
+
 Tool-result bodies for `find_sessions`, `list_sessions`, and `read_session` are excluded to prevent prior session-search output from polluting the index. Their assistant tool-call arguments remain searchable.
 
 ## Search behavior
@@ -141,11 +153,14 @@ Search joins matching chunks to sessions, applies filters, groups by session, ke
 
 An omitted, empty, or `"*"` query bypasses FTS and lists sessions by `modified_at DESC`. It still honors session filters, exclude filters, and tool filters where applicable. Date filters always compare `sessions.modified_at`.
 
+The `skill` and `skillPath` filters apply as a single `EXISTS` subquery against `session_skills`, so they compose with FTS matching, tool filters, and browse mode without changing which chunk is reported as the match. `skill` matches the name exactly (`COLLATE NOCASE`); `skillPath` matches the `SKILL.md` path as an escaped `LIKE '%...%'` substring, so `%` and `_` are literals. Passing both requires one `session_skills` row to satisfy both predicates, meaning "this skill, loaded from this path".
+
 ## Database schema
 
 ```mermaid
 erDiagram
   sessions ||--o{ chunks : contains
+  sessions ||--o{ session_skills : used
   chunks ||--|| chunks_fts : indexed_by_rowid
 
   sessions {
@@ -176,6 +191,13 @@ erDiagram
     text source_type
   }
 
+  session_skills {
+    text session_id FK
+    text name
+    text path
+    text source
+  }
+
   chunks_fts {
     int rowid
     text content
@@ -189,6 +211,9 @@ Indexes currently include:
 - `idx_chunks_tool`
 - `idx_sessions_parent`
 - `idx_chunks_entry`
+- `idx_session_skills_session`
+- `idx_session_skills_name`
+- `idx_session_skills_path`
 
 ## Database sync
 
@@ -204,6 +229,8 @@ Indexes currently include:
 
 `sesame index --full` calls `dropAll()` before indexing.
 
+Migration 4 (`session_skills`) resets `sessions.file_mtime` to `-1`, so a plain `sesame index` re-parses everything once and backfills skill rows. A full rebuild is not required for skills.
+
 Run a full rebuild after upgrading to populate title/checkpoint metadata and remove previously indexed session-discovery result bodies:
 
 ```bash
@@ -213,8 +240,8 @@ sesame index --full
 `dropAll()`:
 
 - drops FTS triggers
-- drops chunk indexes
-- drops `chunks_fts`, `chunks`, `sessions`, `metadata`, and `schema_migrations`
+- drops chunk and skill indexes
+- drops `chunks_fts`, `chunks`, `session_skills`, `sessions`, `metadata`, and `schema_migrations`
 - recreates the current schema
 - records all migrations as applied for the fresh schema
 

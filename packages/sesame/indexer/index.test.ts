@@ -8,7 +8,13 @@ import {
   test,
   vi,
 } from "vitest";
-import { type Database, getSession, openDatabase } from "../storage/db";
+import {
+  type Database,
+  getSession,
+  getSessionSkills,
+  openDatabase,
+  search,
+} from "../storage/db";
 import { createSessionBuilder } from "../test-helpers/session-factory";
 import { indexFile, indexSessions } from "./index";
 
@@ -337,6 +343,63 @@ describe("indexer", () => {
       expect(chunks.map((chunk) => chunk.content).join("\n")).toContain(
         "Find session arguments",
       );
+    });
+  });
+
+  describe("skill indexing", () => {
+    test("records injected skill invocations and SKILL.md reads", async () => {
+      addFile(
+        "/tmp/sesame-sessions/sess-skills.jsonl",
+        createSessionBuilder()
+          .withHeader({ id: "sess-skills", cwd: "/project" })
+          .withUserMessage("use the vitest skill")
+          .withSkillInvocation("vitest", "/skills/vitest/SKILL.md")
+          .withToolCall("Read", { path: "/other-skills/biome/SKILL.md" })
+          .withToolCall("Read", { path: "/other-skills/biome/reference.md" })
+          .build(),
+      );
+
+      await indexSessions(db, "/tmp/sesame-sessions");
+
+      expect(getSessionSkills(db, "sess-skills")).toEqual([
+        {
+          session_id: "sess-skills",
+          name: "biome",
+          path: "/other-skills/biome/SKILL.md",
+          source: "read",
+        },
+        {
+          session_id: "sess-skills",
+          name: "vitest",
+          path: "/skills/vitest/SKILL.md",
+          source: "invocation",
+        },
+      ]);
+
+      expect(
+        search(db, "*", { skill: "biome" }).map((r) => r.sessionId),
+      ).toEqual(["sess-skills"]);
+      expect(
+        search(db, "*", { skillPath: "/skills/vitest/" }).map(
+          (r) => r.sessionId,
+        ),
+      ).toEqual(["sess-skills"]);
+    });
+
+    test("re-indexing replaces skills instead of duplicating them", async () => {
+      const path = addFile(
+        "/tmp/sesame-sessions/sess-reindex.jsonl",
+        createSessionBuilder()
+          .withHeader({ id: "sess-reindex", cwd: "/project" })
+          .withSkillInvocation("vitest", "/skills/vitest/SKILL.md")
+          .build(),
+      );
+
+      await indexSessions(db, "/tmp/sesame-sessions");
+      touch(path);
+      await indexSessions(db, "/tmp/sesame-sessions");
+
+      expect(getSessionSkills(db, "sess-reindex")).toHaveLength(1);
     });
   });
 });

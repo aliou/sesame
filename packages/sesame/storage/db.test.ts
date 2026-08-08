@@ -6,12 +6,16 @@ import {
   dropAll,
   getMetadata,
   getSession,
+  getSessionSkills,
+  getSkillsForSessions,
   getStats,
   insertSession,
+  listIndexedSkills,
   listSessions,
   openDatabase,
   type StoredChunk,
   type StoredSession,
+  type StoredSkill,
   search,
   setMetadata,
 } from "./db.ts";
@@ -1841,5 +1845,254 @@ describe("Database operations", () => {
     insertSession(db, session, chunks);
 
     expect(search(db, "common")).toHaveLength(1);
+  });
+
+  describe("skill filters", () => {
+    function seedSkillSessions(): void {
+      const makeSession = (
+        id: string,
+        cwd: string,
+        modifiedAt: string,
+      ): StoredSession => ({
+        id,
+        source: "pi",
+        path: `/path/${id}.jsonl`,
+        cwd,
+        name: id,
+        created_at: modifiedAt,
+        modified_at: modifiedAt,
+        message_count: 1,
+        file_mtime: Date.now(),
+        parent_session_id: null,
+      });
+
+      const makeChunk = (id: string, content: string): StoredChunk => ({
+        id: 0,
+        session_id: id,
+        kind: "message",
+        role: "user",
+        tool_name: null,
+        seq: 0,
+        content,
+        is_error: null,
+        entry_id: null,
+        parent_entry_id: null,
+        timestamp: null,
+        source_type: "message",
+      });
+
+      const makeSkill = (
+        sessionId: string,
+        name: string,
+        path: string | null,
+        source: string,
+      ): StoredSkill => ({ session_id: sessionId, name, path, source });
+
+      insertSession(
+        db,
+        makeSession("s-vitest", "/project-a", "2026-01-10T10:00:00Z"),
+        [makeChunk("s-vitest", "writing coverage assertions")],
+        [
+          makeSkill(
+            "s-vitest",
+            "vitest",
+            "/skills/vitest/SKILL.md",
+            "invocation",
+          ),
+        ],
+      );
+
+      insertSession(
+        db,
+        makeSession("s-biome", "/project-b", "2026-01-11T10:00:00Z"),
+        [makeChunk("s-biome", "writing coverage assertions")],
+        [
+          makeSkill("s-biome", "biome", "/other-skills/biome/SKILL.md", "read"),
+          makeSkill(
+            "s-biome",
+            "vitest",
+            "/other-skills/vitest/SKILL.md",
+            "read",
+          ),
+        ],
+      );
+
+      insertSession(
+        db,
+        makeSession("s-none", "/project-c", "2026-01-12T10:00:00Z"),
+        [makeChunk("s-none", "writing coverage assertions")],
+      );
+    }
+
+    test("search filters by skill name across FTS and browse modes", () => {
+      db = openDatabase(dbPath);
+      seedSkillSessions();
+
+      expect(
+        search(db, "coverage", { skill: "vitest" })
+          .map((r) => r.sessionId)
+          .sort(),
+      ).toEqual(["s-biome", "s-vitest"]);
+
+      expect(
+        search(db, "*", { skill: "biome" }).map((r) => r.sessionId),
+      ).toEqual(["s-biome"]);
+
+      expect(search(db, "*", { skill: "unknown" })).toHaveLength(0);
+    });
+
+    test("skill name matching is case-insensitive", () => {
+      db = openDatabase(dbPath);
+      seedSkillSessions();
+
+      expect(
+        search(db, "*", { skill: "ViTest" })
+          .map((r) => r.sessionId)
+          .sort(),
+      ).toEqual(["s-biome", "s-vitest"]);
+    });
+
+    test("search filters by skill path substring", () => {
+      db = openDatabase(dbPath);
+      seedSkillSessions();
+
+      expect(
+        search(db, "*", { skillPath: "/other-skills/" }).map(
+          (r) => r.sessionId,
+        ),
+      ).toEqual(["s-biome"]);
+
+      expect(
+        search(db, "coverage", {
+          skill: "vitest",
+          skillPath: "/skills/vitest",
+        }).map((r) => r.sessionId),
+      ).toEqual(["s-vitest"]);
+    });
+
+    test("skill and skillPath must match the same skill", () => {
+      db = openDatabase(dbPath);
+      seedSkillSessions();
+
+      // s-biome used biome at /other-skills/ and vitest at /other-skills/,
+      // but no skill named biome under /skills/.
+      expect(
+        search(db, "*", { skill: "biome", skillPath: "/skills/vitest" }),
+      ).toHaveLength(0);
+    });
+
+    test("skillPath wildcards are treated as literals", () => {
+      db = openDatabase(dbPath);
+      seedSkillSessions();
+
+      expect(search(db, "*", { skillPath: "%" })).toHaveLength(0);
+      expect(search(db, "*", { skillPath: "_kills" })).toHaveLength(0);
+    });
+
+    test("skill filter composes with cwd and tool filters", () => {
+      db = openDatabase(dbPath);
+      seedSkillSessions();
+
+      expect(
+        search(db, "*", { skill: "vitest", cwd: "/project-b" }).map(
+          (r) => r.sessionId,
+        ),
+      ).toEqual(["s-biome"]);
+
+      expect(
+        search(db, "*", { skill: "vitest", toolsOnly: true }),
+      ).toHaveLength(0);
+    });
+
+    test("listSessions filters by skill", () => {
+      db = openDatabase(dbPath);
+      seedSkillSessions();
+
+      expect(
+        listSessions(db, { skill: "vitest" })
+          .map((s) => s.id)
+          .sort(),
+      ).toEqual(["s-biome", "s-vitest"]);
+
+      expect(
+        listSessions(db, { skillPath: "/other-skills/" }).map((s) => s.id),
+      ).toEqual(["s-biome"]);
+
+      expect(
+        listSessions(db, { skill: "biome", cwd: "/project-a" }),
+      ).toHaveLength(0);
+
+      expect(listSessions(db)).toHaveLength(3);
+    });
+
+    test("deleting a session removes its skills", () => {
+      db = openDatabase(dbPath);
+      seedSkillSessions();
+
+      deleteSession(db, "s-biome");
+
+      expect(getSessionSkills(db, "s-biome")).toEqual([]);
+      expect(search(db, "*", { skill: "biome" })).toHaveLength(0);
+    });
+
+    test("getSessionSkills and getSkillsForSessions return stored rows", () => {
+      db = openDatabase(dbPath);
+      seedSkillSessions();
+
+      expect(getSessionSkills(db, "s-vitest")).toEqual([
+        {
+          session_id: "s-vitest",
+          name: "vitest",
+          path: "/skills/vitest/SKILL.md",
+          source: "invocation",
+        },
+      ]);
+
+      const batch = getSkillsForSessions(db, ["s-vitest", "s-biome", "s-none"]);
+      expect(batch.get("s-biome")?.map((s) => s.name)).toEqual([
+        "biome",
+        "vitest",
+      ]);
+      expect(batch.has("s-none")).toBe(false);
+      expect(getSkillsForSessions(db, []).size).toBe(0);
+    });
+
+    test("listIndexedSkills aggregates session counts", () => {
+      db = openDatabase(dbPath);
+      seedSkillSessions();
+
+      expect(listIndexedSkills(db)).toEqual([
+        {
+          name: "vitest",
+          sessionCount: 2,
+          sources: ["invocation", "read"],
+          paths: ["/other-skills/vitest/SKILL.md", "/skills/vitest/SKILL.md"],
+        },
+        {
+          name: "biome",
+          sessionCount: 1,
+          sources: ["read"],
+          paths: ["/other-skills/biome/SKILL.md"],
+        },
+      ]);
+
+      expect(listIndexedSkills(db, { source: "invocation" })).toEqual([
+        {
+          name: "vitest",
+          sessionCount: 1,
+          sources: ["invocation"],
+          paths: ["/skills/vitest/SKILL.md"],
+        },
+      ]);
+      // Paths honor the same session scope as the counts.
+      expect(listIndexedSkills(db, { cwd: "/project-a" })).toEqual([
+        {
+          name: "vitest",
+          sessionCount: 1,
+          sources: ["invocation"],
+          paths: ["/skills/vitest/SKILL.md"],
+        },
+      ]);
+    });
   });
 });

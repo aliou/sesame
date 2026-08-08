@@ -4,14 +4,18 @@
 
 export type { IndexResult } from "./indexer/index";
 export { indexFile, indexSessions } from "./indexer/index";
+export { detectSkills, skillNameFromPath } from "./parsers/detect-skills";
 export { PiParser } from "./parsers/pi";
 export type {
   Database,
   ListSessionsOptions,
+  ListSkillsOptions,
   SearchOptions,
   SearchResult,
+  SkillSummary,
   StoredChunk,
   StoredSession,
+  StoredSkill,
 } from "./storage/db";
 
 export {
@@ -19,8 +23,11 @@ export {
   dropAll,
   getSession,
   getSessionMtime,
+  getSessionSkills,
+  getSkillsForSessions,
   getStats,
   insertSession,
+  listIndexedSkills,
   listSessions,
   openDatabase,
   search,
@@ -29,6 +36,8 @@ export {
 export type {
   ParsedSession,
   SessionMetadata,
+  SkillUsage,
+  SkillUsageSource,
   ToolCall,
   Turn,
 } from "./types/session";

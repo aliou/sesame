@@ -4,6 +4,7 @@
 
 import { join } from "node:path";
 import {
+  getSkillsForSessions,
   getXDGPaths,
   loadConfig,
   openDatabase,
@@ -45,6 +46,10 @@ export default async function searchCommand(args: string[]): Promise<void> {
       options.toolName = args[++i];
     } else if (arg === "--path") {
       options.pathFilter = args[++i];
+    } else if (arg === "--skill") {
+      options.skill = args[++i];
+    } else if (arg === "--skill-path") {
+      options.skillPath = args[++i];
     } else if (arg === "--exclude") {
       options.exclude ??= [];
       options.exclude.push(args[++i]);
@@ -86,6 +91,16 @@ export default async function searchCommand(args: string[]): Promise<void> {
       return;
     }
 
+    const skillsBySession = getSkillsForSessions(
+      db,
+      results.map((r) => r.sessionId),
+    );
+    const skillNames = (sessionId: string): string[] => [
+      ...new Set(
+        (skillsBySession.get(sessionId) ?? []).map((skill) => skill.name),
+      ),
+    ];
+
     // Output results
     if (options.json) {
       console.log(
@@ -107,6 +122,7 @@ export default async function searchCommand(args: string[]): Promise<void> {
               matchedType: r.matchedType,
               matchedEntryId: r.matchedEntryId,
               matchedAt: r.matchedAt,
+              skills: skillNames(r.sessionId),
             })),
           },
           null,
@@ -128,6 +144,10 @@ export default async function searchCommand(args: string[]): Promise<void> {
         console.log(`  [${score}] ${result.sessionId} (${name}) - ${date}`);
         if (result.cwd) {
           console.log(`         ${result.cwd}`);
+        }
+        const skills = skillNames(result.sessionId);
+        if (skills.length > 0) {
+          console.log(`         skills: ${skills.join(", ")}`);
         }
         console.log(`         "${result.matchedSnippet}"\n`);
       }

@@ -3,11 +3,11 @@ import { join } from "node:path";
 import { PiParser } from "../parsers/pi";
 import {
   type Database,
-  deleteSession,
   getSessionMtime,
   insertSession,
   type StoredChunk,
   type StoredSession,
+  type StoredSkill,
 } from "../storage/db";
 import { readFirstLine } from "../utils/io";
 import { formatToolCall } from "./format-tool-call";
@@ -70,13 +70,9 @@ async function indexKnownFile(
     console.error(`Indexing ${filePath}...`);
     const parsedSession = await parser.parse(filePath);
 
-    // Check if session exists (may not have been caught above)
+    // Check if session exists (may not have been caught above). `insertSession`
+    // replaces any existing row in the same transaction, so no separate delete.
     const storedMtime = getSessionMtime(db, parsedSession.id);
-
-    // Delete old data if exists
-    if (storedMtime !== null) {
-      deleteSession(db, parsedSession.id);
-    }
 
     // Build stored session
     const storedSession: StoredSession = {
@@ -155,8 +151,15 @@ async function indexKnownFile(
       });
     }
 
+    const skills: StoredSkill[] = parsedSession.skills.map((skill) => ({
+      session_id: parsedSession.id,
+      name: skill.name,
+      path: skill.path,
+      source: skill.source,
+    }));
+
     // Insert into database
-    insertSession(db, storedSession, chunks);
+    insertSession(db, storedSession, chunks, skills);
 
     // Track if this was new or updated
     if (storedMtime === null) {

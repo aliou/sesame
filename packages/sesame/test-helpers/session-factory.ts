@@ -20,6 +20,16 @@ export interface SessionBuilder {
     options?: { isError?: boolean },
   ): SessionBuilder;
   withBashExecution(command: string, output: string): SessionBuilder;
+  withSkillInvocation(
+    name: string,
+    path: string,
+    options?: { body?: string; details?: Record<string, unknown> | null },
+  ): SessionBuilder;
+  withCustomMessage(
+    customType: string,
+    content: string,
+    details?: unknown,
+  ): SessionBuilder;
   withCompactionSummary(summary: string): SessionBuilder;
   withLabel(targetId: string, label?: string): SessionBuilder;
   build(): string;
@@ -172,6 +182,31 @@ export function createSessionBuilder(): SessionBuilder {
             output,
             exitCode: 0,
           },
+        }),
+      );
+      return this;
+    },
+
+    withSkillInvocation(name, path, options = {}) {
+      const body = options.body ?? `# ${name}\n\nSkill body.`;
+      const content = `<skill name="${name}" location="${path}">\nReferences are relative to ${path.replace(/\/SKILL\.md$/, "")}.\n\n${body}\n</skill>`;
+      const details =
+        options.details === undefined ? { name, path } : options.details;
+      return builder.withCustomMessage(
+        "skill-invocation",
+        content,
+        details ?? undefined,
+      );
+    },
+
+    withCustomMessage(customType, content, details) {
+      lines.push(
+        JSON.stringify({
+          type: "custom_message",
+          customType,
+          content,
+          display: true,
+          details,
         }),
       );
       return this;

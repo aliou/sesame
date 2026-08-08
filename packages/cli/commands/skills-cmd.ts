@@ -1,0 +1,84 @@
+/**
+ * Skills command - list skills used across indexed sessions
+ */
+
+import { join } from "node:path";
+import {
+  getXDGPaths,
+  type ListSkillsOptions,
+  listIndexedSkills,
+  loadConfig,
+  openDatabase,
+  parseRelativeDate,
+} from "@aliou/sesame";
+
+const MAX_DISPLAYED_PATHS = 3;
+
+export default async function skillsCommand(args: string[]): Promise<void> {
+  const options: ListSkillsOptions = { limit: 100 };
+  let json = false;
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+
+    if (arg === "--cwd") {
+      options.cwd = args[++i];
+    } else if (arg === "--after") {
+      options.after = parseRelativeDate(args[++i]);
+    } else if (arg === "--before") {
+      options.before = parseRelativeDate(args[++i]);
+    } else if (arg === "--limit") {
+      options.limit = Number.parseInt(args[++i], 10);
+    } else if (arg === "--source") {
+      const source = args[++i];
+      if (source !== "invocation" && source !== "read") {
+        throw new Error(
+          `Invalid --source "${source}". Expected "invocation" or "read".`,
+        );
+      }
+      options.source = source;
+    } else if (arg === "--json") {
+      json = true;
+    } else if (arg.startsWith("-")) {
+      throw new Error(`Unknown option: ${arg}`);
+    }
+  }
+
+  await loadConfig();
+
+  const paths = getXDGPaths();
+  const db = openDatabase(join(paths.data, "index.sqlite"));
+
+  try {
+    const skills = listIndexedSkills(db, options);
+
+    if (json) {
+      console.log(
+        JSON.stringify({ skillCount: skills.length, skills }, null, 2),
+      );
+      return;
+    }
+
+    if (skills.length === 0) {
+      console.log("No skills found in the index.");
+      return;
+    }
+
+    console.log(`Found ${skills.length} skills\n`);
+    for (const skill of skills) {
+      const sources = skill.sources.join("+") || "unknown";
+      console.log(
+        `  ${skill.name} (${skill.sessionCount} sessions, ${sources})`,
+      );
+      for (const path of skill.paths.slice(0, MAX_DISPLAYED_PATHS)) {
+        console.log(`      ${path}`);
+      }
+      const hidden = skill.paths.length - MAX_DISPLAYED_PATHS;
+      if (hidden > 0) {
+        console.log(`      ... ${hidden} more paths (--json for all)`);
+      }
+    }
+  } finally {
+    db.close();
+  }
+}
