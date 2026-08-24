@@ -147,6 +147,66 @@ describe("Database operations", () => {
     expect(indexNames).toContain("idx_chunks_entry");
   });
 
+  test("openDatabase backfills actor from a pre-005 session_skills table", () => {
+    const LegacyDatabaseConstructor = nodeSqlite.DatabaseSync;
+    const legacyDb = new LegacyDatabaseConstructor(dbPath);
+
+    legacyDb.exec(`
+      CREATE TABLE sessions (
+        id TEXT PRIMARY KEY,
+        source TEXT NOT NULL,
+        path TEXT NOT NULL,
+        cwd TEXT,
+        name TEXT,
+        created_at TEXT,
+        modified_at TEXT,
+        message_count INTEGER,
+        file_mtime INTEGER
+      );
+      CREATE TABLE chunks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        role TEXT,
+        tool_name TEXT,
+        seq INTEGER,
+        content TEXT NOT NULL
+      );
+      CREATE TABLE session_skills (
+        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        path TEXT,
+        source TEXT NOT NULL
+      );
+      INSERT INTO sessions (id, source, path, file_mtime)
+        VALUES ('s1', 'pi', '/p/s1.jsonl', 1);
+      INSERT INTO session_skills (session_id, name, path, source)
+        VALUES ('s1', 'vitest', '/skills/vitest/SKILL.md', 'invocation');
+      INSERT INTO session_skills (session_id, name, path, source)
+        VALUES ('s1', 'biome', '/skills/biome/SKILL.md', 'read');
+    `);
+    legacyDb.close();
+
+    db = openDatabase(dbPath);
+
+    expect(getSessionSkills(db, "s1")).toEqual([
+      {
+        session_id: "s1",
+        name: "biome",
+        path: "/skills/biome/SKILL.md",
+        actor: "agent",
+        detail: null,
+      },
+      {
+        session_id: "s1",
+        name: "vitest",
+        path: "/skills/vitest/SKILL.md",
+        actor: "user",
+        detail: null,
+      },
+    ]);
+  });
+
   test("insertSession + search finds it", () => {
     db = openDatabase(dbPath);
 
@@ -1885,8 +1945,9 @@ describe("Database operations", () => {
         sessionId: string,
         name: string,
         path: string | null,
-        source: string,
-      ): StoredSkill => ({ session_id: sessionId, name, path, source });
+        actor: "user" | "agent",
+        detail: "slash" | "autocomplete" | null = null,
+      ): StoredSkill => ({ session_id: sessionId, name, path, actor, detail });
 
       insertSession(
         db,
@@ -1897,7 +1958,8 @@ describe("Database operations", () => {
             "s-vitest",
             "vitest",
             "/skills/vitest/SKILL.md",
-            "invocation",
+            "user",
+            "slash",
           ),
         ],
       );
@@ -1907,12 +1969,17 @@ describe("Database operations", () => {
         makeSession("s-biome", "/project-b", "2026-01-11T10:00:00Z"),
         [makeChunk("s-biome", "writing coverage assertions")],
         [
-          makeSkill("s-biome", "biome", "/other-skills/biome/SKILL.md", "read"),
+          makeSkill(
+            "s-biome",
+            "biome",
+            "/other-skills/biome/SKILL.md",
+            "agent",
+          ),
           makeSkill(
             "s-biome",
             "vitest",
             "/other-skills/vitest/SKILL.md",
-            "read",
+            "agent",
           ),
         ],
       );
@@ -2044,7 +2111,8 @@ describe("Database operations", () => {
           session_id: "s-vitest",
           name: "vitest",
           path: "/skills/vitest/SKILL.md",
-          source: "invocation",
+          actor: "user",
+          detail: "slash",
         },
       ]);
 
@@ -2061,26 +2129,32 @@ describe("Database operations", () => {
       db = openDatabase(dbPath);
       seedSkillSessions();
 
+      const userSlash = [{ actor: "user", details: ["slash"] }];
+      const agentRead = [{ actor: "agent", details: [null] }];
+
       expect(listIndexedSkills(db)).toEqual([
         {
           name: "vitest",
           sessionCount: 2,
-          sources: ["invocation", "read"],
+          actors: ["agent", "user"],
+          details: [...agentRead, ...userSlash],
           paths: ["/other-skills/vitest/SKILL.md", "/skills/vitest/SKILL.md"],
         },
         {
           name: "biome",
           sessionCount: 1,
-          sources: ["read"],
+          actors: ["agent"],
+          details: agentRead,
           paths: ["/other-skills/biome/SKILL.md"],
         },
       ]);
 
-      expect(listIndexedSkills(db, { source: "invocation" })).toEqual([
+      expect(listIndexedSkills(db, { actor: "user" })).toEqual([
         {
           name: "vitest",
           sessionCount: 1,
-          sources: ["invocation"],
+          actors: ["user"],
+          details: userSlash,
           paths: ["/skills/vitest/SKILL.md"],
         },
       ]);
@@ -2089,7 +2163,8 @@ describe("Database operations", () => {
         {
           name: "vitest",
           sessionCount: 1,
-          sources: ["invocation"],
+          actors: ["user"],
+          details: userSlash,
           paths: ["/skills/vitest/SKILL.md"],
         },
       ]);

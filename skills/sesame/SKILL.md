@@ -49,7 +49,7 @@ sesame search "*" --cwd /path --after 2w --exclude <session-id>
 
 ```bash
 sesame skills
-sesame skills --after 1m --source invocation
+sesame skills --after 1m --actor user
 sesame skills --cwd /path/to/project --json
 ```
 
@@ -84,6 +84,6 @@ sesame watch --interval 30
 - Multi-word searches use all terms first, then any-term fallback only when filters leave no strict matches. JSON output includes `matchMode` and matching entry provenance.
 - Date filters use each session's modification time.
 - Titles and active checkpoints are searchable. Discovery-tool result bodies are not indexed.
-- Skill usage is detected two ways: injected `?skill-name` blocks (`source: invocation`) and `SKILL.md` reads (`source: read`). `--skill` matches the skill directory name exactly, case-insensitively. Search output lists each result's skills.
+- Skill usage records who loaded it (`actor: user` for `/skill:name` slash commands and `?name` autocomplete blocks, `agent` for `SKILL.md` reads). `--skill` matches the skill directory name exactly, case-insensitively. Search output lists each result's skills.
 - Scores are normalized to `0.00-1.00` for display. Higher is better.
 - `sesame watch` runs an initial index pass, then re-indexes on change.

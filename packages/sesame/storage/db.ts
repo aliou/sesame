@@ -52,8 +52,10 @@ export interface StoredSkill {
   name: string;
   /** Absolute path to SKILL.md, when known. */
   path: string | null;
-  /** `invocation` (injected skill block) or `read` (SKILL.md read via a tool). */
-  source: string;
+  /** Actor who loaded this skill: user injected it, agent read it. */
+  actor: "user" | "agent";
+  /** How the skill was discovered: slash (user typed /skill), autocomplete, or null (read). */
+  detail: "slash" | "autocomplete" | null;
 }
 
 /** A skill aggregated across the indexed sessions that used it. */
@@ -61,8 +63,13 @@ export interface SkillSummary {
   name: string;
   /** Number of distinct sessions that used the skill. */
   sessionCount: number;
-  /** Usage kinds seen for this skill: `invocation`, `read`, or both. */
-  sources: string[];
+  /** Actors seen for this skill: `user` or `agent`, or both. */
+  actors: string[];
+  /** How each actor discovered the skill, grouped by actor. */
+  details: Array<{
+    actor: "user" | "agent";
+    details: ("slash" | "autocomplete" | null)[];
+  }>;
   /** Known SKILL.md paths for this skill, most used first. */
   paths: string[];
 }
@@ -71,8 +78,8 @@ export interface ListSkillsOptions {
   cwd?: string;
   after?: string;
   before?: string;
-  /** Restrict to one usage source. */
-  source?: "invocation" | "read";
+  /** Restrict to one usage actor. */
+  actor?: "user" | "agent";
   limit?: number; // default 100
 }
 
@@ -176,7 +183,8 @@ CREATE TABLE IF NOT EXISTS session_skills (
   session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   path TEXT,
-  source TEXT NOT NULL
+  actor TEXT NOT NULL,
+  detail TEXT
 );
 
 CREATE TABLE IF NOT EXISTS metadata (
@@ -294,6 +302,11 @@ function ensurePostMigrationIndexes(db: Database): void {
     "CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id)",
   );
   db.exec("CREATE INDEX IF NOT EXISTS idx_chunks_entry ON chunks(entry_id)");
+  // Depends on the actor column, which only exists after migration 005 has
+  // run on databases that predate it.
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_session_skills_actor ON session_skills(actor)",
+  );
 }
 
 export function getSessionMtime(
@@ -365,8 +378,8 @@ export function insertSession(
   );
 
   const insertSkillStmt = db.prepare(
-    `INSERT INTO session_skills (session_id, name, path, source)
-     VALUES (?, ?, ?, ?)`,
+    `INSERT INTO session_skills (session_id, name, path, actor, detail)
+     VALUES (?, ?, ?, ?, ?)`,
   );
 
   // Replace any existing row for this session so a re-index never leaves the
@@ -411,7 +424,8 @@ export function insertSession(
         skill.session_id,
         skill.name,
         skill.path,
-        skill.source,
+        skill.actor,
+        skill.detail,
       );
     }
 
@@ -769,9 +783,9 @@ export function getSessionSkills(
   sessionId: string,
 ): StoredSkill[] {
   const stmt = db.prepare(
-    `SELECT session_id, name, path, source FROM session_skills
+    `SELECT session_id, name, path, actor, detail FROM session_skills
      WHERE session_id = ?
-     ORDER BY name, source`,
+     ORDER BY name, actor`,
   );
   return stmt.all(sessionId) as StoredSkill[];
 }
@@ -786,9 +800,9 @@ export function getSkillsForSessions(
 
   const placeholders = sessionIds.map(() => "?").join(",");
   const stmt = db.prepare(
-    `SELECT session_id, name, path, source FROM session_skills
+    `SELECT session_id, name, path, actor, detail FROM session_skills
      WHERE session_id IN (${placeholders})
-     ORDER BY name, source`,
+     ORDER BY name, actor`,
   );
   const rows = stmt.all(...(sessionIds as [string])) as StoredSkill[];
 
@@ -818,7 +832,8 @@ export function listIndexedSkills(
     SELECT
       sk.name as name,
       COUNT(DISTINCT sk.session_id) as sessionCount,
-      GROUP_CONCAT(DISTINCT sk.source) as sources
+      GROUP_CONCAT(DISTINCT sk.actor) as actors,
+      GROUP_CONCAT(DISTINCT sk.actor || char(31) || COALESCE(sk.detail, '')) as detailPairs
     FROM session_skills sk
     JOIN sessions s ON s.id = sk.session_id
     WHERE 1=1
@@ -839,7 +854,8 @@ export function listIndexedSkills(
   const rows = db.prepare(sql).all(...(params as [string])) as Array<{
     name: string;
     sessionCount: number;
-    sources: string | null;
+    actors: string | null;
+    detailPairs: string | null;
   }>;
 
   const pathsByName = skillPathsByName(
@@ -848,12 +864,37 @@ export function listIndexedSkills(
     options,
   );
 
-  return rows.map((row) => ({
-    name: row.name,
-    sessionCount: row.sessionCount,
-    sources: (row.sources ?? "").split(",").filter(Boolean).sort(),
-    paths: pathsByName.get(row.name) ?? [],
-  }));
+  return rows.map((row) => {
+    const actors = (row.actors ?? "").split(",").filter(Boolean).sort();
+    const detailsByActor = new Map<
+      string,
+      ("slash" | "autocomplete" | null)[]
+    >();
+    for (const pair of (row.detailPairs ?? "").split(",").filter(Boolean)) {
+      const sep = pair.indexOf("\u001f");
+      const actor = sep === -1 ? pair : pair.slice(0, sep);
+      const rawDetail = sep === -1 ? "" : pair.slice(sep + 1);
+      const detail = rawDetail ? (rawDetail as "slash" | "autocomplete") : null;
+      const existing = detailsByActor.get(actor);
+      if (existing) {
+        if (!existing.includes(detail)) existing.push(detail);
+      } else {
+        detailsByActor.set(actor, [detail]);
+      }
+    }
+    return {
+      name: row.name,
+      sessionCount: row.sessionCount,
+      actors,
+      details: [...detailsByActor.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([actor, details]) => ({
+          actor: actor as "user" | "agent",
+          details,
+        })),
+      paths: pathsByName.get(row.name) ?? [],
+    };
+  });
 }
 
 /**
@@ -866,7 +907,7 @@ function skillScopeClause(options: ListSkillsOptions): {
   sql: string;
   params: unknown[];
 } {
-  const { cwd, after, before, source } = options;
+  const { cwd, after, before, actor } = options;
   let sql = "";
   const params: unknown[] = [];
 
@@ -882,9 +923,9 @@ function skillScopeClause(options: ListSkillsOptions): {
     sql += " AND s.modified_at <= ?";
     params.push(before);
   }
-  if (source) {
-    sql += " AND sk.source = ?";
-    params.push(source);
+  if (actor) {
+    sql += " AND sk.actor = ?";
+    params.push(actor);
   }
 
   return { sql, params };
@@ -989,6 +1030,7 @@ export function dropAll(db: Database): void {
   db.exec("DROP INDEX IF EXISTS idx_session_skills_session");
   db.exec("DROP INDEX IF EXISTS idx_session_skills_name");
   db.exec("DROP INDEX IF EXISTS idx_session_skills_path");
+  db.exec("DROP INDEX IF EXISTS idx_session_skills_actor");
 
   // Drop tables (FTS table first to avoid foreign key issues)
   db.exec("DROP TABLE IF EXISTS chunks_fts");

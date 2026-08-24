@@ -131,7 +131,7 @@ Options:
 
 - `--cwd <path>`: only count sessions whose `cwd` starts with this path
 - `--after <date>` / `--before <date>`: same date handling as `search`
-- `--source <kind>`: `invocation` (injected skill block) or `read` (`SKILL.md` read via a tool)
+- `--actor <kind>`: `user` (skill injected by a user action: `/skill:name` slash command or `?name` autocomplete) or `agent` (`SKILL.md` read via a tool)
 - `--limit <n>`: max rows (default: 100, capped at 1000)
 - `--json`: output JSON
 
@@ -139,7 +139,7 @@ Examples:
 
 ```bash
 sesame skills
-sesame skills --after 1m --source invocation
+sesame skills --after 1m --actor user
 sesame skills --cwd /Users/me/code --json
 ```
 
@@ -152,7 +152,11 @@ JSON output:
     {
       "name": "vitest",
       "sessionCount": 9,
-      "sources": ["invocation", "read"],
+      "actors": ["agent", "user"],
+      "details": [
+        { "actor": "agent", "details": [null] },
+        { "actor": "user", "details": ["autocomplete", "slash"] }
+      ],
       "paths": ["/Users/me/skills/vitest/SKILL.md"]
     }
   ]

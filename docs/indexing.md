@@ -136,12 +136,15 @@ Checkpoint chunks retain the labeled target's `entry_id`, parent entry id, and t
 
 ### Skill rows
 
-`packages/sesame/parsers/detect-skills.ts` derives skill usage from a session's turns and writes it to `session_skills`. Two signals are recognized:
+`packages/sesame/parsers/detect-skills.ts` derives skill usage from a session's turns and writes it to `session_skills`. Each row records who loaded the skill (`actor`) and, for user invocations, how (`detail`). Three signals are recognized:
 
-- `source = "invocation"`: a `custom_message` with `customType: "skill-invocation"`, produced by the `skill-autocomplete` hook when a `?skill-name` reference is expanded. Name and path come from the entry's `details`, falling back to the `<skill name="..." location="...">` opening tag in the content.
-- `source = "read"`: a read tool call (`read`, `read_file`, `view`, `cat`) whose path argument points at a `SKILL.md` file. This covers skills the agent loads from the system prompt listing. The skill name is the containing directory, so `/skills/vitest/SKILL.md` yields `vitest`.
+- `actor = "user"`, `detail = "slash"`: a `<skill name="..." location="...">` block at the very start of a user message. Pi core inlines this block when the user types `/skill:name`.
+- `actor = "user"`, `detail = "autocomplete"`: a `custom_message` with `customType: "skill-invocation"`, produced by the `skill-autocomplete` hook when a `?skill-name` reference is expanded. Name and path come from the entry's `details`, falling back to the `<skill name="..." location="...">` opening tag in the content.
+- `actor = "agent"`, `detail = null`: a read tool call (`read`, `read_file`, `view`, `cat`) whose path argument points at a `SKILL.md` file. This covers skills the agent loads from the system prompt listing. The skill name is the containing directory, so `/skills/vitest/SKILL.md` yields `vitest`.
 
-Rows are de-duplicated on name + path + source, so a skill both injected and read produces two rows. Reads of other files inside a skill directory are ignored.
+Rows are de-duplicated on name + path + actor + detail, so a skill both invoked and read produces two rows. Reads of other files inside a skill directory are ignored.
+
+Migration `005` adds the `actor` and `detail` columns to existing databases and backfills `actor` from the legacy `source` column (`invocation` -> `user`, `read` -> `agent`); `detail` stays `NULL` for old rows. The `source` column is left in place but no longer read.
 
 Tool-result bodies for `find_sessions`, `list_sessions`, and `read_session` are excluded to prevent prior session-search output from polluting the index. Their assistant tool-call arguments remain searchable.
 
@@ -195,7 +198,8 @@ erDiagram
     text session_id FK
     text name
     text path
-    text source
+    text actor
+    text detail
   }
 
   chunks_fts {
@@ -214,6 +218,7 @@ Indexes currently include:
 - `idx_session_skills_session`
 - `idx_session_skills_name`
 - `idx_session_skills_path`
+- `idx_session_skills_actor` (created after migrations run, since migration `005` adds the `actor` column)
 
 ## Database sync
 

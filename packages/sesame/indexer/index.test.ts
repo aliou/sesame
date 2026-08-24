@@ -366,13 +366,15 @@ describe("indexer", () => {
           session_id: "sess-skills",
           name: "biome",
           path: "/other-skills/biome/SKILL.md",
-          source: "read",
+          actor: "agent",
+          detail: null,
         },
         {
           session_id: "sess-skills",
           name: "vitest",
           path: "/skills/vitest/SKILL.md",
-          source: "invocation",
+          actor: "user",
+          detail: "autocomplete",
         },
       ]);
 

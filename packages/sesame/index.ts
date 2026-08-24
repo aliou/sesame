@@ -36,8 +36,9 @@ export {
 export type {
   ParsedSession,
   SessionMetadata,
+  SkillActor,
+  SkillDetail,
   SkillUsage,
-  SkillUsageSource,
   ToolCall,
   Turn,
 } from "./types/session";

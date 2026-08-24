@@ -29,14 +29,14 @@ export default async function skillsCommand(args: string[]): Promise<void> {
       options.before = parseRelativeDate(args[++i]);
     } else if (arg === "--limit") {
       options.limit = Number.parseInt(args[++i], 10);
-    } else if (arg === "--source") {
-      const source = args[++i];
-      if (source !== "invocation" && source !== "read") {
+    } else if (arg === "--actor") {
+      const actor = args[++i];
+      if (actor !== "user" && actor !== "agent") {
         throw new Error(
-          `Invalid --source "${source}". Expected "invocation" or "read".`,
+          `Invalid --actor "${actor}". Expected "user" or "agent".`,
         );
       }
-      options.source = source;
+      options.actor = actor;
     } else if (arg === "--json") {
       json = true;
     } else if (arg.startsWith("-")) {
@@ -66,9 +66,10 @@ export default async function skillsCommand(args: string[]): Promise<void> {
 
     console.log(`Found ${skills.length} skills\n`);
     for (const skill of skills) {
-      const sources = skill.sources.join("+") || "unknown";
+      const actors =
+        skill.actors.length > 0 ? skill.actors.join("+") : "unknown";
       console.log(
-        `  ${skill.name} (${skill.sessionCount} sessions, ${sources})`,
+        `  ${skill.name} (${skill.sessionCount} sessions, ${actors})`,
       );
       for (const path of skill.paths.slice(0, MAX_DISPLAYED_PATHS)) {
         console.log(`      ${path}`);

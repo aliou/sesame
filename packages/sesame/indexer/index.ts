@@ -155,7 +155,8 @@ async function indexKnownFile(
       session_id: parsedSession.id,
       name: skill.name,
       path: skill.path,
-      source: skill.source,
+      actor: skill.actor,
+      detail: skill.detail ?? null,
     }));
 
     // Insert into database

@@ -1,14 +1,11 @@
 /**
  * Skill usage detection.
  *
- * A session can pick up a skill in two ways:
+ * A session can pick up a skill in three ways:
  *
- * 1. Injection — the `skill-autocomplete` hook turns a `?skill-name` reference
- *    into a `custom_message` entry with `customType: "skill-invocation"`, whose
- *    content is a `<skill name="..." location="...">` block and whose `details`
- *    carry `{ name, path }`.
- * 2. Reading — the agent reads a `SKILL.md` file with a read tool, which is how
- *    skills listed in the system prompt get loaded.
+ * 1. Invocation (slash) — the user types /skill:name at the start of a user message, and Pi inlines a <skill name="..." location="..."> block.
+ * 2. Invocation (autocomplete) — the skill-autocomplete hook expands a ?skill-name reference into a custom_message with customType: "skill-invocation".
+ * 3. Reading — the agent reads a SKILL.md file with a read tool.
  */
 
 import { basename, dirname } from "node:path";
@@ -21,6 +18,11 @@ const PATH_ARG_KEYS = ["path", "file_path", "filePath"];
 
 /** Matches the opening tag of an injected skill block. */
 const SKILL_BLOCK_PATTERN = /<skill\s+name="([^"]*)"\s+location="([^"]*)"/;
+
+/** Same block, but only at the very start of the text. */
+const LEADING_SKILL_BLOCK_PATTERN = new RegExp(
+  `^${SKILL_BLOCK_PATTERN.source}`,
+);
 
 /** Derive the skill name from a SKILL.md path (its containing directory). */
 export function skillNameFromPath(path: string): string | null {
@@ -38,7 +40,42 @@ function readString(
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function detectInvocation(turn: Turn): SkillUsage | null {
+/**
+ * Detect a skill when the user types /skill:name at the START of their message.
+ * Patterns:
+ * - /skill:name: calls the skill with named parameters (maybe embedded in text)
+ * - User role turns with textContent.startsWith('<skill name="..." location="...">')
+ * The inline block can precede any user-typed content; we extract the first skill block.
+ */
+function detectSlashInvocation(turn: Turn): SkillUsage | null {
+  if (turn.role !== "user") return null;
+
+  // pi core inlines the block at the very start of the user's message.
+  const text = turn.textContent.trimStart();
+
+  const blockMatch = LEADING_SKILL_BLOCK_PATTERN.exec(text);
+  if (blockMatch) {
+    const name = blockMatch[1].trim() || null;
+    const path = blockMatch[2].trim() || null;
+
+    if (!name || !path) return null;
+
+    return {
+      name,
+      path,
+      actor: "user",
+      detail: "slash",
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Detect a skill from a custom_message skill-invocation.
+ * Triggered when the skill-autocomplete hook expands a ?skill-name reference.
+ */
+function detectAutocompleteInvocation(turn: Turn): SkillUsage | null {
   if (turn.customType !== SKILL_INVOCATION_CUSTOM_TYPE) return null;
 
   let name = readString(turn.details, "name");
@@ -56,9 +93,22 @@ function detectInvocation(turn: Turn): SkillUsage | null {
   if (!name && path) name = skillNameFromPath(path);
   if (!name) return null;
 
-  return { name, path, source: "invocation" };
+  return {
+    name,
+    path,
+    actor: "user",
+    detail: "autocomplete",
+  };
 }
 
+/**
+ * Detect a skill from a read tool call that loads a SKILL.md file.
+ * Patterns:
+ * - read(path: "/path/to/skills/vitest/SKILL.md")
+ * - read_file(file_path: "/path/to/skills/vitest/SKILL.md")
+ * - view(filePath: "/path/to/skills/vitest/SKILL.md")
+ * - cat(filePath: "/path/to/skills/vitest/SKILL.md")
+ */
 function detectReads(turn: Turn): SkillUsage[] {
   const usages: SkillUsage[] = [];
 
@@ -71,7 +121,14 @@ function detectReads(turn: Turn): SkillUsage[] {
 
       const path = value.trim();
       const name = skillNameFromPath(path);
-      if (name) usages.push({ name, path, source: "read" });
+      if (name) {
+        usages.push({
+          name,
+          path,
+          actor: "agent",
+          detail: null,
+        });
+      }
       break;
     }
   }
@@ -81,22 +138,29 @@ function detectReads(turn: Turn): SkillUsage[] {
 
 /**
  * Collect every skill referenced by a session's turns, de-duplicated on
- * name + path + source and kept in first-seen order.
+ * name + path + actor + detail and kept in first-seen order.
  */
 export function detectSkills(turns: Turn[]): SkillUsage[] {
-  const seen = new Set<string>();
+  // Combine all skill detection methods to avoid missing any.
+  // Remove `source` from the add() function key for deduplication.
+  const seeSkills = new Set<string>();
   const skills: SkillUsage[] = [];
 
   const add = (usage: SkillUsage) => {
-    const key = `${usage.source}\u0000${usage.name}\u0000${usage.path ?? ""}`;
-    if (seen.has(key)) return;
-    seen.add(key);
+    // Deduplicate on name + path + actor + detail (not on the deprecated source field)
+    const key = `${usage.actor}\u0000${usage.name}\u0000${usage.path ?? ""}\u0000${usage.detail ?? ""}`;
+    if (seeSkills.has(key)) return;
+    seeSkills.add(key);
     skills.push(usage);
   };
 
   for (const turn of turns) {
-    const invocation = detectInvocation(turn);
-    if (invocation) add(invocation);
+    // Try all three detection methods for each turn.
+    // Detect slash invocation first (new shape) and keep the fallback autocomplete behavior too.
+    const slashInvocation = detectSlashInvocation(turn);
+    if (slashInvocation) add(slashInvocation);
+    const autocompleteInvocation = detectAutocompleteInvocation(turn);
+    if (autocompleteInvocation) add(autocompleteInvocation);
     for (const read of detectReads(turn)) add(read);
   }
 

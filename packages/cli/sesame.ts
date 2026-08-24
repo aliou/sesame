@@ -54,7 +54,7 @@ Skills options:
   --cwd <path>       Filter by project directory
   --after <date>     Filter sessions after date
   --before <date>    Filter sessions before date
-  --source <kind>    Filter by usage kind: invocation | read
+  --actor <kind>     Filter by who used the skill: user | agent
   --limit <n>        Max results (default: 100)
   --json             Output as JSON
 `);

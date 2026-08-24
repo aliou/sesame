@@ -42,8 +42,11 @@ export interface Turn {
   details?: Record<string, unknown>;
 }
 
-/** How a skill ended up in a session. */
-export type SkillUsageSource = "invocation" | "read";
+/** How an agent skill ended up in a session: who loaded it and how. */
+export type SkillActor = "user" | "agent";
+
+/** How a skill was invoked or discovered. */
+export type SkillDetail = "slash" | "autocomplete" | null;
 
 /** A skill referenced by a session, detected from invocations or SKILL.md reads. */
 export interface SkillUsage {
@@ -51,7 +54,10 @@ export interface SkillUsage {
   name: string;
   /** Absolute path to SKILL.md, when known. */
   path: string | null;
-  source: SkillUsageSource;
+  /** Actor who loaded this skill: user injected it, agent read it. */
+  actor: SkillActor;
+  /** How the skill was discovered: slash (user typed /skill), autocomplete, or null (read). */
+  detail?: SkillDetail;
 }
 
 /** Searchable session metadata with the Pi entry that defines it. */
