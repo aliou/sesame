@@ -1,5 +1,40 @@
 # @aliou/sesame-cli
 
+## 0.12.0
+
+### Minor Changes
+
+- 2b74960: CLI updates: fuzzy skills, tool-arg filters, and clig.dev conventions.
+
+  - `sesame search --skill <text>` falls back to fuzzy matching over skill names and descriptions when the text is not an exact skill name
+  - `sesame search --arg tool:key=value` filters by allowlisted tool call parameters (repeatable, validated loudly)
+  - `sesame skills --source` becomes `--actor user|agent` and prints each skill's latest known description
+  - New `--version`/`-V` (global and per-command), per-command `--help`/`-h`, loud errors for unknown options and missing flag values, and `--limit`/`--interval` validation as positive integers
+
+  After upgrading, run `sesame index` once: migrations 5-7 invalidate stored mtimes, so this pass re-parses every session and backfills skill actors, the skill catalog, and tool arguments.
+
+- 5353588: Add skill-based filtering.
+
+  Sesame now records which skills each session used, from two signals: `skill-invocation` custom messages injected by the `skill-autocomplete` hook, and read tool calls that load a `SKILL.md` file. Usage is stored in a new `session_skills` table.
+
+  - `sesame search --skill <name>` filters by exact skill name (case-insensitive)
+  - `sesame search --skill-path <substring>` filters by `SKILL.md` path; combined with `--skill` both must match the same skill
+  - `sesame skills` lists indexed skills with session counts, sources, and paths
+  - Search output lists each result's skills
+  - Library adds `SearchOptions.skill` / `skillPath`, the same two options on `ListSessionsOptions`, plus `getSessionSkills`, `getSkillsForSessions`, `listIndexedSkills`, `detectSkills`, `skillNameFromPath`, and `ParsedSession.skills`
+
+  Migration 4 resets stored mtimes, so the next `sesame index` backfills skills for existing indexes.
+
+  `insertSession` now replaces an existing session inside its transaction, so an interrupted re-index can no longer leave a session deleted without a replacement.
+
+### Patch Changes
+
+- Updated dependencies [3c6c5dc]
+- Updated dependencies [5353588]
+- Updated dependencies [ab12849]
+- Updated dependencies [b5e0c78]
+  - @aliou/sesame@0.12.0
+
 ## 0.11.1
 
 ### Patch Changes
