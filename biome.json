@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.7/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.10/schema.json",
   "plugins": [
     "./node_modules/@aliou/biome-plugins/plugins/no-inline-imports.grit",
     "./node_modules/@aliou/biome-plugins/plugins/no-js-import-extension.grit",
@@ -7,7 +7,11 @@
     "./node_modules/@aliou/biome-plugins/plugins/no-emojis.grit",
     "./node_modules/@aliou/biome-plugins/plugins/no-empty-catch.grit",
     "./node_modules/@aliou/biome-plugins/plugins/no-inner-types.grit",
-    "./node_modules/@aliou/biome-plugins/plugins/no-buried-await.grit"
+    "./node_modules/@aliou/biome-plugins/plugins/no-buried-await.grit",
+    "./node_modules/@aliou/biome-plugins/plugins/no-chained-type-assertions.grit",
+    "./node_modules/@aliou/biome-plugins/plugins/no-reflect-get.grit",
+    "./node_modules/@aliou/biome-plugins/plugins/no-reflect-apply.grit",
+    "./node_modules/@aliou/biome-plugins/plugins/no-unimported-text.grit"
   ],
   "vcs": {
     "enabled": true,
