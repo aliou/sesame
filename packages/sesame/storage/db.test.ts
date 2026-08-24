@@ -208,6 +208,43 @@ describe("Database operations", () => {
         detail: null,
       },
     ]);
+
+    // Regression: the legacy source column was TEXT NOT NULL with no
+    // default, so new inserts failed after migrating until it was dropped.
+    insertSession(
+      db,
+      {
+        id: "s2",
+        source: "pi",
+        path: "/p/s2.jsonl",
+        cwd: null,
+        name: null,
+        created_at: null,
+        modified_at: null,
+        message_count: 0,
+        file_mtime: 1,
+        parent_session_id: null,
+      },
+      [],
+      [
+        {
+          session_id: "s2",
+          name: "herdr",
+          path: "/skills/herdr/SKILL.md",
+          actor: "user",
+          detail: "autocomplete",
+        },
+      ],
+    );
+    expect(getSessionSkills(db, "s2")).toEqual([
+      {
+        session_id: "s2",
+        name: "herdr",
+        path: "/skills/herdr/SKILL.md",
+        actor: "user",
+        detail: "autocomplete",
+      },
+    ]);
   });
 
   test("insertSession + search finds it", () => {
