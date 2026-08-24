@@ -2331,3 +2331,101 @@ describe("skill catalog", () => {
     expect(search(db, "*", { skillQuery: "unobtainium zanzibar" })).toEqual([]);
   });
 });
+
+describe("tool arg filters", () => {
+  let dbPath: string;
+  let db: any;
+
+  beforeEach(() => {
+    dbPath = `/tmp/sesame-test-toolargs-${Date.now()}-${Math.random()}.sqlite`;
+    db = openDatabase(dbPath);
+
+    const session: StoredSession = {
+      id: "s-find",
+      source: "pi",
+      path: "/p/s-find.jsonl",
+      cwd: "/project-a",
+      name: null,
+      created_at: "2026-01-10T10:00:00Z",
+      modified_at: "2026-01-10T10:00:00Z",
+      message_count: 1,
+      file_mtime: 1,
+      parent_session_id: null,
+    };
+    const toolChunk: StoredChunk = {
+      id: 0,
+      session_id: "s-find",
+      kind: "tool_call",
+      role: null,
+      tool_name: "find",
+      seq: 0,
+      content: 'find(pattern: "useStorage", path: "/project-a")',
+      is_error: null,
+      entry_id: null,
+      parent_entry_id: null,
+      timestamp: null,
+      source_type: null,
+      tool_args: [
+        { key: "pattern", value: "useStorage" },
+        { key: "path", value: "/project-a" },
+      ],
+    };
+    insertSession(db, session, [toolChunk]);
+  });
+
+  afterEach(() => {
+    if (db) db.close();
+    for (const suffix of ["", "-wal", "-shm"]) {
+      try {
+        unlinkSync(`${dbPath}${suffix}`);
+      } catch {
+        void 0;
+      }
+    }
+  });
+
+  test("insertSession stores allowlisted args and search filters by them", () => {
+    const rows = db
+      .prepare("SELECT key, value FROM tool_call_args ORDER BY key")
+      .all() as Array<{ key: string; value: string }>;
+    expect(rows).toEqual([
+      { key: "path", value: "/project-a" },
+      { key: "pattern", value: "useStorage" },
+    ]);
+
+    expect(
+      search(db, "*", {
+        toolArgs: [{ tool: "find", key: "pattern", value: "useStorage" }],
+      }).map((r) => r.sessionId),
+    ).toEqual(["s-find"]);
+
+    expect(
+      search(db, "*", {
+        toolArgs: [{ tool: "find", key: "pattern", value: "otherHook" }],
+      }),
+    ).toEqual([]);
+
+    // AND semantics across filters
+    expect(
+      search(db, "*", {
+        toolArgs: [
+          { tool: "find", key: "pattern", value: "useStorage" },
+          { tool: "find", key: "path", value: "/project-a" },
+        ],
+      }).map((r) => r.sessionId),
+    ).toEqual(["s-find"]);
+  });
+
+  test("listSessions honors toolArgs", () => {
+    expect(
+      listSessions(db, {
+        toolArgs: [{ tool: "find", key: "path", value: "/project-a" }],
+      }).map((s) => s.id),
+    ).toEqual(["s-find"]);
+    expect(
+      listSessions(db, {
+        toolArgs: [{ tool: "find", key: "path", value: "/elsewhere" }],
+      }),
+    ).toEqual([]);
+  });
+});

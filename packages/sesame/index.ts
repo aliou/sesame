@@ -21,7 +21,6 @@ export type {
   StoredSession,
   StoredSkill,
 } from "./storage/db";
-
 export {
   deleteSession,
   dropAll,
@@ -40,6 +39,12 @@ export {
   skillNameExists,
   upsertSkillCatalog,
 } from "./storage/db";
+export {
+  extractToolArgs,
+  isAllowedToolArg,
+  TOOL_ARG_ALLOWLIST,
+  ToolArgFilter,
+} from "./tool-arg-allowlist";
 export type {
   ParsedSession,
   SessionMetadata,

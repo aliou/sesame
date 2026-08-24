@@ -12,6 +12,7 @@ import {
   type SearchOptions,
   search,
   skillNameExists,
+  TOOL_ARG_ALLOWLIST,
 } from "@aliou/sesame";
 
 function normalizeScore(rawScore: number): string {
@@ -55,6 +56,40 @@ export default async function searchCommand(args: string[]): Promise<void> {
     } else if (arg === "--exclude") {
       options.exclude ??= [];
       options.exclude.push(args[++i]);
+    } else if (arg === "--arg") {
+      const spec = args[++i];
+      if (!spec) {
+        throw new Error("--arg requires a value: --arg tool:key=value");
+      }
+      const colon = spec.indexOf(":");
+      const equals = spec.indexOf("=", colon + 1);
+      const tool = colon > 0 ? spec.slice(0, colon) : "";
+      const key = equals > colon ? spec.slice(colon + 1, equals) : "";
+      const value = equals > colon ? spec.slice(equals + 1) : "";
+      if (!tool || !key || !value) {
+        throw new Error(
+          `Invalid --arg "${spec}". Expected format: tool:key=value`,
+        );
+      }
+      const allowedKeys = TOOL_ARG_ALLOWLIST[tool.toLowerCase()];
+      if (!allowedKeys) {
+        throw new Error(
+          `Unknown tool "${tool}" for --arg. Allowed tools: ${Object.keys(
+            TOOL_ARG_ALLOWLIST,
+          ).join(", ")}`,
+        );
+      }
+      if (!allowedKeys.includes(key.toLowerCase())) {
+        throw new Error(
+          `Unknown parameter "${key}" for tool "${tool}". Allowed: ${allowedKeys.join(", ")}`,
+        );
+      }
+      options.toolArgs ??= [];
+      options.toolArgs.push({
+        tool: tool.toLowerCase(),
+        key: key.toLowerCase(),
+        value,
+      });
     } else if (arg === "--json") {
       options.json = true;
     } else if (!arg.startsWith("-")) {

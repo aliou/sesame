@@ -60,6 +60,7 @@ Options:
 - `--path <file>`: restrict matches to tool-call chunks whose formatted content mentions a path
 - `--skill <text>`: sessions that used a skill. An exact name match (case-insensitive) filters to that skill; otherwise the text is resolved fuzzy against the skill catalog (name + description) and sessions using any matched skill are returned. An unmatched query returns nothing.
 - `--skill-path <substring>`: only sessions that used a skill whose `SKILL.md` path contains the substring; combining it with `--skill` requires both to match the same skill
+- `--arg <tool:key=value>`: only sessions where `tool` was called with parameter `key` containing `value` (repeatable, AND across filters; validation fails loudly for tools/keys outside the allowlist: `bash:command`, `read/write/edit:path`, `find/grep:pattern,path`, `ls:path`, `find_sessions:query,cwd`, `list_sessions:cwd`, `read_session:goal`, `read_url:url`, `synthetic_web_search:query`, `process:action,name`)
 - `--exclude <id>`: exclude a session id; repeatable
 - `--json`: output JSON
 

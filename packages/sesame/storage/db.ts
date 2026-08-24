@@ -1,5 +1,6 @@
 import { statSync } from "node:fs";
 import { createRequire } from "node:module";
+import type { ToolArgFilter } from "../tool-arg-allowlist";
 import type { SkillMatch, SkillUsage } from "../types/session";
 import { migrations } from "./migrations/index";
 
@@ -45,6 +46,7 @@ export interface StoredChunk {
   parent_entry_id: string | null;
   timestamp: string | null;
   source_type: string | null;
+  tool_args?: Array<{ key: string; value: string }>;
 }
 
 export interface StoredSkill {
@@ -116,6 +118,8 @@ export interface ListSessionsOptions {
    * names. Ignored when `skill` or `skillPath` is set.
    */
   skillQuery?: string;
+  /** Only sessions with a tool call matching each filter (AND semantics). */
+  toolArgs?: ToolArgFilter[];
   limit?: number; // default 50
   offset?: number; // default 0
 }
@@ -141,6 +145,7 @@ export interface SearchOptions {
   exclude?: string[];
   json?: boolean;
   status?: "success" | "error";
+  toolArgs?: ToolArgFilter[];
 }
 
 /**
@@ -264,6 +269,17 @@ CREATE TRIGGER IF NOT EXISTS skills_au AFTER UPDATE ON skills BEGIN
   INSERT INTO skills_fts(skills_fts, rowid, name, description) VALUES('delete', old.id, old.name, COALESCE(old.description, ''));
   INSERT INTO skills_fts(rowid, name, description) VALUES (new.id, new.name, COALESCE(new.description, ''));
 END;
+
+CREATE TABLE IF NOT EXISTS tool_call_args (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  chunk_id INTEGER NOT NULL REFERENCES chunks(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  value TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_tool_call_args_chunk ON tool_call_args(chunk_id);
+CREATE INDEX IF NOT EXISTS idx_tool_call_args_key ON tool_call_args(key);
+
 `;
 
 const nodeSqlite = require("node:sqlite") as {
@@ -595,6 +611,28 @@ export function insertSession(
       );
     }
 
+    // Insert tool_call_args for chunks with filterable args
+    const insertToolArgStmt = db.prepare(
+      `INSERT INTO tool_call_args (chunk_id, key, value)
+       VALUES (?, ?, ?)`,
+    );
+    // Collect all chunk IDs after insertion
+    const chunkRows = db
+      .prepare("SELECT id FROM chunks WHERE session_id = ? ORDER BY id")
+      .all(session.id) as Array<{ id: number }>;
+
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      if (chunk.tool_args && chunk.tool_args.length > 0) {
+        const chunkId = chunkRows[i]?.id;
+        if (chunkId) {
+          for (const arg of chunk.tool_args) {
+            insertToolArgStmt.run(chunkId, arg.key, arg.value);
+          }
+        }
+      }
+    }
+
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
@@ -705,6 +743,14 @@ function listAllSessions(db: Database, options: SearchOptions): SearchResult[] {
       if (toolName) {
         params.push(toolName);
       }
+    }
+  }
+
+  if (options.toolArgs && options.toolArgs.length > 0) {
+    for (const ta of options.toolArgs) {
+      sql +=
+        " AND EXISTS (SELECT 1 FROM chunks c2 JOIN tool_call_args ta2 ON ta2.chunk_id = c2.id WHERE c2.session_id = s.id AND c2.tool_name = ? AND ta2.key = ? AND ta2.value LIKE ? ESCAPE '\\')";
+      params.push(ta.tool, ta.key, `%${escapeLike(ta.value)}%`);
     }
   }
 
@@ -826,6 +872,14 @@ function searchFts(
     }
   }
 
+  if (options.toolArgs && options.toolArgs.length > 0) {
+    for (const ta of options.toolArgs) {
+      sql +=
+        " AND EXISTS (SELECT 1 FROM chunks c2 JOIN tool_call_args ta2 ON ta2.chunk_id = c2.id WHERE c2.session_id = s.id AND c2.tool_name = ? AND ta2.key = ? AND ta2.value LIKE ? ESCAPE '\\')";
+      params.push(ta.tool, ta.key, `%${escapeLike(ta.value)}%`);
+    }
+  }
+
   const rows = db.prepare(sql).all(...(params as [string])) as Array<{
     sessionId: string;
     source: string;
@@ -926,6 +980,14 @@ export function listSessions(
   const skillFilter = skillFilterClause(db, options, "s");
   sql += skillFilter.sql;
   params.push(...skillFilter.params);
+
+  if (options.toolArgs && options.toolArgs.length > 0) {
+    for (const ta of options.toolArgs) {
+      sql +=
+        " AND EXISTS (SELECT 1 FROM chunks c2 JOIN tool_call_args ta2 ON ta2.chunk_id = c2.id WHERE c2.session_id = s.id AND c2.tool_name = ? AND ta2.key = ? AND ta2.value LIKE ? ESCAPE '\\')";
+      params.push(ta.tool, ta.key, `%${escapeLike(ta.value)}%`);
+    }
+  }
 
   sql += " ORDER BY s.modified_at DESC LIMIT ? OFFSET ?";
   params.push(limit, offset);
@@ -1233,10 +1295,15 @@ export function dropAll(db: Database): void {
   db.exec("DROP INDEX IF EXISTS idx_session_skills_path");
   db.exec("DROP INDEX IF EXISTS idx_session_skills_actor");
 
+  // Tool call args indexes (depends on tool_call_args table)
+  db.exec("DROP INDEX IF EXISTS idx_tool_call_args_chunk");
+  db.exec("DROP INDEX IF EXISTS idx_tool_call_args_key");
+
   // Drop tables (FTS table first to avoid foreign key issues)
   db.exec("DROP TABLE IF EXISTS skills_fts");
   db.exec("DROP TABLE IF EXISTS skills");
   db.exec("DROP TABLE IF EXISTS chunks_fts");
+  db.exec("DROP TABLE IF EXISTS tool_call_args");
   db.exec("DROP TABLE IF EXISTS chunks");
   db.exec("DROP TABLE IF EXISTS session_skills");
   db.exec("DROP TABLE IF EXISTS sessions");

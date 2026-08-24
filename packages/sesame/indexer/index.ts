@@ -12,6 +12,7 @@ import {
   type StoredSkill,
   upsertSkillCatalog,
 } from "../storage/db";
+import { extractToolArgs } from "../tool-arg-allowlist";
 import type { SkillUsage } from "../types/session";
 import { readFirstLine } from "../utils/io";
 import { formatToolCall } from "./format-tool-call";
@@ -140,6 +141,7 @@ async function indexKnownFile(
       for (const tc of turn.toolCalls) {
         const content = formatToolCall(tc);
         if (content.trim()) {
+          const toolArgs = extractToolArgs(tc.name, tc.args ?? {});
           chunks.push({
             id: 0,
             session_id: parsedSession.id,
@@ -153,6 +155,7 @@ async function indexKnownFile(
             parent_entry_id: turn.parentEntryId ?? null,
             timestamp: turn.timestamp ?? null,
             source_type: turn.sourceType ?? null,
+            ...(toolArgs.length > 0 ? { tool_args: toolArgs } : {}),
           });
         }
       }

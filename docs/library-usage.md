@@ -179,6 +179,8 @@ const fuzzy = search(db, "*", { skillQuery: "git hooks" });
 
 `StoredSkill` is `{ session_id, name, path, actor, detail }` with `path` and `detail` nullable. `listIndexedSkills()` returns `{ name, sessionCount, actors, details, paths, description }` grouped by skill name, ordered by `sessionCount DESC, name ASC`; its `limit` is clamped to `1..1000`.
 
+`toolArgs` filters sessions by allowlisted tool call parameters: `search(db, "*", { toolArgs: [{ tool: "find", key: "pattern", value: "useStorage" }] })` (repeatable, AND semantics, `value` is a `LIKE` substring match; also on `ListSessionsOptions`). The allowlist is exported as `TOOL_ARG_ALLOWLIST` with `ToolArgFilter`, `isAllowedToolArg`, and `extractToolArgs`.
+
 `skillQuery` resolves the text against the skill catalog (`matchSkills`, BM25 over name + description) and filters sessions to the matched skill names; an unmatched query returns no sessions. `skillNameExists(db, name)` reports whether an indexed session used that exact skill name — the CLI uses it to decide between exact and fuzzy `--skill`.
 
 The catalog is written at index time by `upsertSkillCatalog(db, usages, seenAt)`, which keeps one row per distinct (name, description, path) and only bumps `last_seen_at` when the same version is seen again. Descriptions come from invocation hook details or `parseSkillDescription(skillMarkdown)` (SKILL.md frontmatter).

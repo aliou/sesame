@@ -5,6 +5,7 @@ import addTreeFields from "./003-add-tree-fields";
 import addSessionSkills from "./004-add-session-skills";
 import addSessionSkillsActorDetail from "./005-add-session-skills-actor-detail";
 import addSkillCatalog from "./006-add-skill-catalog";
+import addToolCallArgs from "./007-add-tool-call-args";
 
 export interface Migration {
   id: number;
@@ -29,4 +30,5 @@ export const migrations: Migration[] = [
   addSessionSkills,
   addSessionSkillsActorDetail,
   addSkillCatalog,
+  addToolCallArgs,
 ];
