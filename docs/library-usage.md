@@ -147,7 +147,7 @@ const sessions = listSessions(db, {
 
 ## Skills
 
-Sesame records which skills a session used, either because the `skill-autocomplete` hook injected a `<skill>` block (`source: "invocation"`) or because the agent read a `SKILL.md` file with a read tool (`source: "read"`).
+Sesame records which skills a session used and who loaded them: `actor: "user"` for user invocations (`detail: "slash"` for `/skill:name` blocks inlined at the start of a user message, `detail: "autocomplete"` for `?name` expansions by the `skill-autocomplete` hook) and `actor: "agent"` when the agent read a `SKILL.md` file with a read tool.
 
 ```ts
 import {
@@ -170,14 +170,22 @@ const bySession = getSkillsForSessions(
 );
 
 // Skill leaderboard across the index
-const summary = listIndexedSkills(db, { source: "invocation", limit: 20 });
+const summary = listIndexedSkills(db, { actor: "user", limit: 20 });
+
+// Fuzzy skill search by name or description, then filter sessions
+const matches = matchSkills(db, "git hooks"); // SkillMatch[]
+const fuzzy = search(db, "*", { skillQuery: "git hooks" });
 ```
 
-`StoredSkill` is `{ session_id, name, path, source }` with `path` nullable. `listIndexedSkills()` returns `{ name, sessionCount, sources, paths }` grouped by skill name, ordered by `sessionCount DESC, name ASC`; its `limit` is clamped to `1..1000`.
+`StoredSkill` is `{ session_id, name, path, actor, detail }` with `path` and `detail` nullable. `listIndexedSkills()` returns `{ name, sessionCount, actors, details, paths, description }` grouped by skill name, ordered by `sessionCount DESC, name ASC`; its `limit` is clamped to `1..1000`.
+
+`skillQuery` resolves the text against the skill catalog (`matchSkills`, BM25 over name + description) and filters sessions to the matched skill names; an unmatched query returns no sessions. `skillNameExists(db, name)` reports whether an indexed session used that exact skill name — the CLI uses it to decide between exact and fuzzy `--skill`.
+
+The catalog is written at index time by `upsertSkillCatalog(db, usages, seenAt)`, which keeps one row per distinct (name, description, path) and only bumps `last_seen_at` when the same version is seen again. Descriptions come from invocation hook details or `parseSkillDescription(skillMarkdown)` (SKILL.md frontmatter).
 
 To derive skill usage without the database, call `detectSkills(parsedSession.turns)`, or read `ParsedSession.skills` directly from `PiParser.parse()`.
 
-Upgrading an existing index adds the `session_skills` table and invalidates stored mtimes, so a plain `sesame index` backfills skills on the next run.
+Upgrading an existing index adds the `session_skills` table (migration 4), the `actor`/`detail` columns with a `source` backfill (migration 5), and the `skills` catalog with `skills_fts` (migration 6). Run a full re-index to backfill actor details and catalog descriptions for existing sessions.
 
 Run `sesame index --full` after upgrading to populate searchable titles/checkpoints and remove existing discovery-result bodies from the index.
 

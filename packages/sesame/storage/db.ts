@@ -1,5 +1,6 @@
 import { statSync } from "node:fs";
 import { createRequire } from "node:module";
+import type { SkillMatch, SkillUsage } from "../types/session";
 import { migrations } from "./migrations/index";
 
 const require = createRequire(import.meta.url);
@@ -72,6 +73,8 @@ export interface SkillSummary {
   }>;
   /** Known SKILL.md paths for this skill, most used first. */
   paths: string[];
+  /** Most recent known description from the skill catalog, when any. */
+  description: string | null;
 }
 
 export interface ListSkillsOptions {
@@ -107,6 +110,12 @@ export interface ListSessionsOptions {
   skill?: string;
   /** Only sessions that used a skill whose SKILL.md path contains this substring. */
   skillPath?: string;
+  /**
+   * Fuzzy skill search: resolved against the skill catalog (name +
+   * description) via BM25, then sessions are filtered to the matched skill
+   * names. Ignored when `skill` or `skillPath` is set.
+   */
+  skillQuery?: string;
   limit?: number; // default 50
   offset?: number; // default 0
 }
@@ -123,6 +132,12 @@ export interface SearchOptions {
   skill?: string;
   /** Only sessions that used a skill whose SKILL.md path contains this substring. */
   skillPath?: string;
+  /**
+   * Fuzzy skill search: resolved against the skill catalog (name +
+   * description) via BM25, then sessions are filtered to the matched skill
+   * names. Ignored when `skill` or `skillPath` is set.
+   */
+  skillQuery?: string;
   exclude?: string[];
   json?: boolean;
   status?: "success" | "error";
@@ -219,6 +234,36 @@ CREATE INDEX IF NOT EXISTS idx_chunks_tool ON chunks(tool_name);
 CREATE INDEX IF NOT EXISTS idx_session_skills_session ON session_skills(session_id);
 CREATE INDEX IF NOT EXISTS idx_session_skills_name ON session_skills(name);
 CREATE INDEX IF NOT EXISTS idx_session_skills_path ON session_skills(path);
+
+CREATE TABLE IF NOT EXISTS skills (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  description TEXT,
+  path TEXT,
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS skills_fts USING fts5(
+  name,
+  description,
+  content='skills',
+  content_rowid='id',
+  tokenize='porter unicode61'
+);
+
+CREATE TRIGGER IF NOT EXISTS skills_ai AFTER INSERT ON skills BEGIN
+  INSERT INTO skills_fts(rowid, name, description) VALUES (new.id, new.name, COALESCE(new.description, ''));
+END;
+
+CREATE TRIGGER IF NOT EXISTS skills_ad AFTER DELETE ON skills BEGIN
+  INSERT INTO skills_fts(skills_fts, rowid, name, description) VALUES('delete', old.id, old.name, COALESCE(old.description, ''));
+END;
+
+CREATE TRIGGER IF NOT EXISTS skills_au AFTER UPDATE ON skills BEGIN
+  INSERT INTO skills_fts(skills_fts, rowid, name, description) VALUES('delete', old.id, old.name, COALESCE(old.description, ''));
+  INSERT INTO skills_fts(rowid, name, description) VALUES (new.id, new.name, COALESCE(new.description, ''));
+END;
 `;
 
 const nodeSqlite = require("node:sqlite") as {
@@ -336,8 +381,115 @@ function escapeLike(value: string): string {
  * constrain the *same* `session_skills` row, so combining them means "this
  * skill, loaded from this path".
  */
+/**
+ * Fuzzy skill search over the catalog.
+ *
+ * Matches `text` against skill names and descriptions with BM25 (OR
+ * semantics between tokens, like the session search fallback) and returns
+ * the matched catalog rows, best first.
+ */
+export function matchSkills(
+  db: Database,
+  text: string,
+  limit = 25,
+): SkillMatch[] {
+  if (!text.trim()) return [];
+
+  const rows = db
+    .prepare(
+      `SELECT s.name as name, s.description as description, s.path as path,
+              bm25(skills_fts) as score
+       FROM skills_fts
+       JOIN skills s ON s.id = skills_fts.rowid
+       WHERE skills_fts MATCH ?
+       ORDER BY score ASC
+       LIMIT ?`,
+    )
+    .all(escapeFtsAnyQuery(text), limit) as SkillMatch[];
+
+  const seen = new Set<string>();
+  const matches: SkillMatch[] = [];
+  for (const row of rows) {
+    const key = `${row.name}\u0000${row.description ?? ""}\u0000${row.path ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    matches.push(row);
+  }
+  return matches;
+}
+
+/** True when a session in the index used a skill with this exact name. */
+export function skillNameExists(db: Database, name: string): boolean {
+  const row = db
+    .prepare(
+      "SELECT 1 as ok FROM session_skills WHERE name = ? COLLATE NOCASE LIMIT 1",
+    )
+    .get(name) as { ok: number } | undefined;
+  return row !== undefined;
+}
+
+/**
+ * Upsert skill usages into the catalog.
+ *
+ * One row per distinct (name, description, path): when the triple already
+ * exists only `last_seen_at` moves, otherwise a new version row is inserted
+ * with both timestamps set to `seenAt` (typically the session mtime).
+ */
+export function upsertSkillCatalog(
+  db: Database,
+  usages: SkillUsage[],
+  seenAt: string,
+): void {
+  const findStmt = db.prepare(
+    `SELECT id FROM skills
+     WHERE name = ?
+       AND (path IS ? OR path = ?)
+       AND (description IS ? OR description = ?)
+     LIMIT 1`,
+  );
+  // ISO timestamps compare lexicographically; only ever move the row forward
+  // so out-of-order scans cannot regress the latest description.
+  const touchStmt = db.prepare(
+    "UPDATE skills SET last_seen_at = ? WHERE id = ? AND last_seen_at < ?",
+  );
+  const insertStmt = db.prepare(
+    `INSERT INTO skills (name, description, path, first_seen_at, last_seen_at)
+     VALUES (?, ?, ?, ?, ?)`,
+  );
+
+  // IMMEDIATE takes the write lock up front, so the SELECT-then-INSERT below
+  // cannot race a second writer into inserting duplicate version rows.
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const usage of usages) {
+      const name = usage.name;
+      const path = usage.path ?? null;
+      const description = usage.description ?? null;
+
+      const existing = findStmt.get(
+        name,
+        path,
+        path,
+        description,
+        description,
+      ) as { id: number } | undefined;
+
+      if (existing) {
+        touchStmt.run(seenAt, existing.id, seenAt);
+      } else {
+        insertStmt.run(name, description, path, seenAt, seenAt);
+      }
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
 function skillFilterClause(
-  options: Pick<SearchOptions, "skill" | "skillPath">,
+  db: Database,
+  options: Pick<SearchOptions, "skill" | "skillPath" | "skillQuery">,
   sessionAlias: string,
 ): { sql: string; params: unknown[] } {
   const predicates: string[] = [];
@@ -351,6 +503,20 @@ function skillFilterClause(
   if (options.skillPath) {
     predicates.push("sk.path LIKE ? ESCAPE '\\'");
     params.push(`%${escapeLike(options.skillPath)}%`);
+  }
+
+  if (!options.skill && !options.skillPath && options.skillQuery) {
+    const names = [
+      ...new Set(matchSkills(db, options.skillQuery).map((m) => m.name)),
+    ];
+    if (names.length === 0) {
+      // An unresolvable fuzzy query must match nothing, not everything.
+      return { sql: " AND 1=0", params };
+    }
+    predicates.push(
+      `sk.name IN (${names.map(() => "?").join(",")}) COLLATE NOCASE`,
+    );
+    params.push(...names);
   }
 
   if (predicates.length === 0) return { sql: "", params };
@@ -508,7 +674,7 @@ function listAllSessions(db: Database, options: SearchOptions): SearchResult[] {
     params.push(...exclude);
   }
 
-  const skillFilter = skillFilterClause(options, "s");
+  const skillFilter = skillFilterClause(db, options, "s");
   sql += skillFilter.sql;
   params.push(...skillFilter.params);
 
@@ -633,7 +799,7 @@ function searchFts(
     sql += ` AND s.id NOT IN (${exclude.map(() => "?").join(",")})`;
     params.push(...exclude);
   }
-  const skillFilter = skillFilterClause(options, "s");
+  const skillFilter = skillFilterClause(db, options, "s");
   sql += skillFilter.sql;
   params.push(...skillFilter.params);
   if (toolsOnly) {
@@ -757,7 +923,7 @@ export function listSessions(
     params.push(before);
   }
 
-  const skillFilter = skillFilterClause(options, "s");
+  const skillFilter = skillFilterClause(db, options, "s");
   sql += skillFilter.sql;
   params.push(...skillFilter.params);
 
@@ -864,6 +1030,11 @@ export function listIndexedSkills(
     options,
   );
 
+  const descriptions = latestSkillDescriptions(
+    db,
+    rows.map((row) => row.name),
+  );
+
   return rows.map((row) => {
     const actors = (row.actors ?? "").split(",").filter(Boolean).sort();
     const detailsByActor = new Map<
@@ -893,8 +1064,35 @@ export function listIndexedSkills(
           details,
         })),
       paths: pathsByName.get(row.name) ?? [],
+      description: descriptions.get(row.name) ?? null,
     };
   });
+}
+
+/** Most recently seen non-null catalog description per skill name. */
+function latestSkillDescriptions(
+  db: Database,
+  names: string[],
+): Map<string, string> {
+  const byName = new Map<string, string>();
+  if (names.length === 0) return byName;
+
+  const placeholders = names.map(() => "?").join(",");
+  const rows = db
+    .prepare(
+      `SELECT name, description FROM skills
+       WHERE name IN (${placeholders}) AND description IS NOT NULL
+       ORDER BY last_seen_at DESC`,
+    )
+    .all(...(names as [string])) as Array<{
+    name: string;
+    description: string;
+  }>;
+
+  for (const row of rows) {
+    if (!byName.has(row.name)) byName.set(row.name, row.description);
+  }
+  return byName;
 }
 
 /**
@@ -1022,6 +1220,9 @@ export function dropAll(db: Database): void {
   db.exec("DROP TRIGGER IF EXISTS chunks_ai");
   db.exec("DROP TRIGGER IF EXISTS chunks_ad");
   db.exec("DROP TRIGGER IF EXISTS chunks_au");
+  db.exec("DROP TRIGGER IF EXISTS skills_ai");
+  db.exec("DROP TRIGGER IF EXISTS skills_ad");
+  db.exec("DROP TRIGGER IF EXISTS skills_au");
 
   // Drop indexes
   db.exec("DROP INDEX IF EXISTS idx_chunks_session");
@@ -1033,6 +1234,8 @@ export function dropAll(db: Database): void {
   db.exec("DROP INDEX IF EXISTS idx_session_skills_actor");
 
   // Drop tables (FTS table first to avoid foreign key issues)
+  db.exec("DROP TABLE IF EXISTS skills_fts");
+  db.exec("DROP TABLE IF EXISTS skills");
   db.exec("DROP TABLE IF EXISTS chunks_fts");
   db.exec("DROP TABLE IF EXISTS chunks");
   db.exec("DROP TABLE IF EXISTS session_skills");

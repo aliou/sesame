@@ -12,12 +12,15 @@ import {
   insertSession,
   listIndexedSkills,
   listSessions,
+  matchSkills,
   openDatabase,
   type StoredChunk,
   type StoredSession,
   type StoredSkill,
   search,
   setMetadata,
+  skillNameExists,
+  upsertSkillCatalog,
 } from "./db.ts";
 
 const require = createRequire(import.meta.url);
@@ -2139,6 +2142,7 @@ describe("Database operations", () => {
           actors: ["agent", "user"],
           details: [...agentRead, ...userSlash],
           paths: ["/other-skills/vitest/SKILL.md", "/skills/vitest/SKILL.md"],
+          description: null,
         },
         {
           name: "biome",
@@ -2146,6 +2150,7 @@ describe("Database operations", () => {
           actors: ["agent"],
           details: agentRead,
           paths: ["/other-skills/biome/SKILL.md"],
+          description: null,
         },
       ]);
 
@@ -2156,6 +2161,7 @@ describe("Database operations", () => {
           actors: ["user"],
           details: userSlash,
           paths: ["/skills/vitest/SKILL.md"],
+          description: null,
         },
       ]);
       // Paths honor the same session scope as the counts.
@@ -2166,8 +2172,162 @@ describe("Database operations", () => {
           actors: ["user"],
           details: userSlash,
           paths: ["/skills/vitest/SKILL.md"],
+          description: null,
         },
       ]);
     });
+  });
+});
+
+describe("skill catalog", () => {
+  let dbPath: string;
+  let db: any;
+
+  beforeEach(() => {
+    dbPath = `/tmp/sesame-test-catalog-${Date.now()}-${Math.random()}.sqlite`;
+    db = openDatabase(dbPath);
+  });
+
+  afterEach(() => {
+    if (db) db.close();
+    for (const suffix of ["", "-wal", "-shm"]) {
+      try {
+        unlinkSync(`${dbPath}${suffix}`);
+      } catch {
+        void 0;
+      }
+    }
+  });
+
+  const usage = (
+    name: string,
+    path: string | null,
+    description: string | null,
+  ) => ({ name, path, description, actor: "user" as const, detail: null });
+
+  test("upsertSkillCatalog inserts, touches, and versions rows", () => {
+    upsertSkillCatalog(
+      db,
+      [usage("vitest", "/skills/vitest/SKILL.md", "Vitest testing patterns")],
+      "2026-01-01T00:00:00Z",
+    );
+
+    let rows = db.prepare("SELECT * FROM skills").all() as Array<
+      Record<string, unknown>
+    >;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].first_seen_at).toBe("2026-01-01T00:00:00Z");
+    expect(rows[0].last_seen_at).toBe("2026-01-01T00:00:00Z");
+
+    // Same triple again: only last_seen_at moves.
+    upsertSkillCatalog(
+      db,
+      [usage("vitest", "/skills/vitest/SKILL.md", "Vitest testing patterns")],
+      "2026-02-01T00:00:00Z",
+    );
+    rows = db.prepare("SELECT * FROM skills").all() as Array<
+      Record<string, unknown>
+    >;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].last_seen_at).toBe("2026-02-01T00:00:00Z");
+
+    // A new description for the same skill adds a version row.
+    upsertSkillCatalog(
+      db,
+      [usage("vitest", "/skills/vitest/SKILL.md", "Write better tests")],
+      "2026-03-01T00:00:00Z",
+    );
+    rows = db
+      .prepare("SELECT * FROM skills ORDER BY last_seen_at")
+      .all() as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(2);
+  });
+
+  test("matchSkills ranks name and description matches", () => {
+    upsertSkillCatalog(
+      db,
+      [
+        usage(
+          "writing-skills",
+          "/skills/writing-skills/SKILL.md",
+          "Guide for creating effective skills",
+        ),
+        usage("biome", "/skills/biome/SKILL.md", "Biome linter and formatter"),
+      ],
+      "2026-01-01T00:00:00Z",
+    );
+
+    expect(matchSkills(db, "creating skills").map((m) => m.name)).toEqual([
+      "writing-skills",
+    ]);
+    expect(matchSkills(db, "biome")[0].name).toBe("biome");
+    expect(matchSkills(db, "unobtainium zanzibar")).toEqual([]);
+    expect(matchSkills(db, "")).toEqual([]);
+  });
+
+  test("openDatabase creates the catalog tables on fresh and re-opened DBs", () => {
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+      .all() as Array<{ name: string }>;
+    expect(tables.map((t) => t.name)).toEqual(
+      expect.arrayContaining(["skills", "skills_fts"]),
+    );
+
+    db.close();
+    db = openDatabase(dbPath);
+    upsertSkillCatalog(
+      db,
+      [usage("vitest", "/skills/vitest/SKILL.md", "Vitest")],
+      "2026-01-01T00:00:00Z",
+    );
+    expect(matchSkills(db, "vitest")).toHaveLength(1);
+  });
+
+  test("skillQuery filters sessions through the catalog", () => {
+    const session: StoredSession = {
+      id: "s1",
+      source: "pi",
+      path: "/p/s1.jsonl",
+      cwd: null,
+      name: null,
+      created_at: null,
+      modified_at: null,
+      message_count: 0,
+      file_mtime: 1,
+      parent_session_id: null,
+    };
+    insertSession(
+      db,
+      session,
+      [],
+      [
+        {
+          session_id: "s1",
+          name: "writing-skills",
+          path: "/skills/writing-skills/SKILL.md",
+          actor: "user",
+          detail: "slash",
+        },
+      ],
+    );
+    upsertSkillCatalog(
+      db,
+      [
+        usage(
+          "writing-skills",
+          "/skills/writing-skills/SKILL.md",
+          "Guide for creating effective skills",
+        ),
+      ],
+      "2026-01-01T00:00:00Z",
+    );
+
+    expect(
+      search(db, "*", { skillQuery: "creating skills" }).map(
+        (r) => r.sessionId,
+      ),
+    ).toEqual(["s1"]);
+    expect(skillNameExists(db, "writing-skills")).toBe(true);
+    expect(search(db, "*", { skillQuery: "unobtainium zanzibar" })).toEqual([]);
   });
 });

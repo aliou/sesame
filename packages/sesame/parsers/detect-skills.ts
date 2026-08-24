@@ -24,6 +24,40 @@ const LEADING_SKILL_BLOCK_PATTERN = new RegExp(
   `^${SKILL_BLOCK_PATTERN.source}`,
 );
 
+/**
+ * Parse the description from a SKILL.md's frontmatter.
+ *
+ * Frontmatter is the block between the first pair of `---` lines at the very
+ * start of the file. The description is the value of the `description:` key
+ * on a single line, with surrounding quotes stripped. Returns null when the
+ * frontmatter or the key is missing.
+ */
+export function parseSkillDescription(markdown: string): string | null {
+  const open = markdown.match(/^---\r?\n/);
+  if (!open) return null;
+
+  const rest = markdown.slice(open[0].length);
+  const close = rest.match(/^---\r?(\n|$)/m);
+  if (!close || close.index === undefined) return null;
+
+  const frontmatter = rest.slice(0, close.index);
+  for (const line of frontmatter.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("description:")) continue;
+
+    let description = trimmed.slice("description:".length).trim();
+    if (
+      (description.startsWith('"') && description.endsWith('"')) ||
+      (description.startsWith("'") && description.endsWith("'"))
+    ) {
+      description = description.slice(1, -1).trim();
+    }
+    return description || null;
+  }
+
+  return null;
+}
+
 /** Derive the skill name from a SKILL.md path (its containing directory). */
 export function skillNameFromPath(path: string): string | null {
   if (basename(path).toLowerCase() !== SKILL_FILENAME) return null;
@@ -98,6 +132,7 @@ function detectAutocompleteInvocation(turn: Turn): SkillUsage | null {
     path,
     actor: "user",
     detail: "autocomplete",
+    description: readString(turn.details, "description"),
   };
 }
 

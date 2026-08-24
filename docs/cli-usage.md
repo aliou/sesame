@@ -58,7 +58,7 @@ Options:
 - `--tools`: search only assistant tool-call chunks
 - `--tool <name>`: search a specific tool name
 - `--path <file>`: restrict matches to tool-call chunks whose formatted content mentions a path
-- `--skill <name>`: only sessions that used this skill (exact directory name, case-insensitive)
+- `--skill <text>`: sessions that used a skill. An exact name match (case-insensitive) filters to that skill; otherwise the text is resolved fuzzy against the skill catalog (name + description) and sessions using any matched skill are returned. An unmatched query returns nothing.
 - `--skill-path <substring>`: only sessions that used a skill whose `SKILL.md` path contains the substring; combining it with `--skill` requires both to match the same skill
 - `--exclude <id>`: exclude a session id; repeatable
 - `--json`: output JSON

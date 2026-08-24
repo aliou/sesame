@@ -45,7 +45,7 @@ Search options:
   --tools            Search only tool call chunks
   --tool <name>      Search specific tool type
   --path <file>      Find sessions that touched a file
-  --skill <name>     Find sessions that used a skill (exact name)
+  --skill <text>     Find sessions by skill: exact name, else fuzzy over name and description
   --skill-path <s>   Find sessions that used a skill whose SKILL.md path contains <s>
   --exclude <id>     Exclude session ID (repeatable)
   --json             Output as JSON

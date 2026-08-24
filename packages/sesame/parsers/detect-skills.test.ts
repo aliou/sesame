@@ -4,7 +4,11 @@
 
 import { describe, expect, it } from "vitest";
 import type { Turn } from "../types/session";
-import { detectSkills, skillNameFromPath } from "./detect-skills";
+import {
+  detectSkills,
+  parseSkillDescription,
+  skillNameFromPath,
+} from "./detect-skills";
 
 describe("skillNameFromPath", () => {
   it("extracts skill name from SKILL.md path", () => {
@@ -423,6 +427,7 @@ describe("deduplication", () => {
         path: "/skills/vitest/SKILL.md",
         actor: "user",
         detail: "autocomplete",
+        description: null,
       },
       {
         name: "vitest",
@@ -431,5 +436,37 @@ describe("deduplication", () => {
         detail: null,
       },
     ]);
+  });
+});
+
+describe("parseSkillDescription", () => {
+  it("extracts an unquoted description from frontmatter", () => {
+    const md =
+      "---\nname: vitest\ndescription: Vitest testing patterns\n---\n\n# Vitest\n";
+    expect(parseSkillDescription(md)).toBe("Vitest testing patterns");
+  });
+
+  it("strips surrounding quotes", () => {
+    expect(
+      parseSkillDescription('---\ndescription: "Quoted value"\n---\n'),
+    ).toBe("Quoted value");
+    expect(
+      parseSkillDescription("---\ndescription: 'Single quoted'\n---\n"),
+    ).toBe("Single quoted");
+  });
+
+  it("keeps colons inside the description", () => {
+    expect(
+      parseSkillDescription("---\ndescription: Use when: writing tests\n---\n"),
+    ).toBe("Use when: writing tests");
+  });
+
+  it("returns null without frontmatter or without the key", () => {
+    expect(
+      parseSkillDescription("# No frontmatter\ndescription: not this one\n"),
+    ).toBeNull();
+    expect(parseSkillDescription("---\nname: vitest\n---\n")).toBeNull();
+    expect(parseSkillDescription("---\nnever closed\n")).toBeNull();
+    expect(parseSkillDescription("")).toBeNull();
   });
 });

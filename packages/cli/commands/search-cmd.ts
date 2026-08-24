@@ -11,6 +11,7 @@ import {
   parseRelativeDate,
   type SearchOptions,
   search,
+  skillNameExists,
 } from "@aliou/sesame";
 
 function normalizeScore(rawScore: number): string {
@@ -23,6 +24,7 @@ function normalizeScore(rawScore: number): string {
 export default async function searchCommand(args: string[]): Promise<void> {
   // Parse arguments
   let query: string | undefined;
+  let skillInput: string | undefined;
   const options: SearchOptions = {
     limit: 10,
   };
@@ -47,7 +49,7 @@ export default async function searchCommand(args: string[]): Promise<void> {
     } else if (arg === "--path") {
       options.pathFilter = args[++i];
     } else if (arg === "--skill") {
-      options.skill = args[++i];
+      skillInput = args[++i];
     } else if (arg === "--skill-path") {
       options.skillPath = args[++i];
     } else if (arg === "--exclude") {
@@ -67,6 +69,16 @@ export default async function searchCommand(args: string[]): Promise<void> {
   const paths = getXDGPaths();
   const dbPath = join(paths.data, "index.sqlite");
   const db = openDatabase(dbPath);
+
+  // --skill <text>: exact skill name when it exists in the index, otherwise
+  // fuzzy search over skill names and descriptions.
+  if (skillInput) {
+    if (skillNameExists(db, skillInput)) {
+      options.skill = skillInput;
+    } else {
+      options.skillQuery = skillInput;
+    }
+  }
 
   try {
     const results = search(db, query, options);

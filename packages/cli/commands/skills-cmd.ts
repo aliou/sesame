@@ -71,6 +71,9 @@ export default async function skillsCommand(args: string[]): Promise<void> {
       console.log(
         `  ${skill.name} (${skill.sessionCount} sessions, ${actors})`,
       );
+      if (skill.description) {
+        console.log(`      "${skill.description}"`);
+      }
       for (const path of skill.paths.slice(0, MAX_DISPLAYED_PATHS)) {
         console.log(`      ${path}`);
       }

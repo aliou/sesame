@@ -1,5 +1,7 @@
 import { readdirSync, statSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { parseSkillDescription } from "../parsers/detect-skills";
 import { PiParser } from "../parsers/pi";
 import {
   type Database,
@@ -8,9 +10,33 @@ import {
   type StoredChunk,
   type StoredSession,
   type StoredSkill,
+  upsertSkillCatalog,
 } from "../storage/db";
+import type { SkillUsage } from "../types/session";
 import { readFirstLine } from "../utils/io";
 import { formatToolCall } from "./format-tool-call";
+
+/**
+ * Fill in missing skill descriptions by reading the referenced SKILL.md and
+ * parsing its frontmatter. Descriptions already provided by the invocation
+ * hook, and skills without a readable file, are left untouched.
+ */
+async function enrichSkillDescriptions(
+  skills: SkillUsage[],
+): Promise<SkillUsage[]> {
+  return Promise.all(
+    skills.map(async (skill) => {
+      if (skill.description || !skill.path) return skill;
+      try {
+        const markdown = await readFile(skill.path, "utf-8");
+        const description = parseSkillDescription(markdown);
+        return description ? { ...skill, description } : skill;
+      } catch {
+        return skill;
+      }
+    }),
+  );
+}
 
 export interface IndexResult {
   added: number;
@@ -151,7 +177,9 @@ async function indexKnownFile(
       });
     }
 
-    const skills: StoredSkill[] = parsedSession.skills.map((skill) => ({
+    const enrichedSkills = await enrichSkillDescriptions(parsedSession.skills);
+
+    const skills: StoredSkill[] = enrichedSkills.map((skill) => ({
       session_id: parsedSession.id,
       name: skill.name,
       path: skill.path,
@@ -161,6 +189,9 @@ async function indexKnownFile(
 
     // Insert into database
     insertSession(db, storedSession, chunks, skills);
+
+    // Record skill description versions in the catalog for fuzzy search.
+    upsertSkillCatalog(db, enrichedSkills, parsedSession.modifiedAt);
 
     // Track if this was new or updated
     if (storedMtime === null) {

@@ -4,7 +4,11 @@
 
 export type { IndexResult } from "./indexer/index";
 export { indexFile, indexSessions } from "./indexer/index";
-export { detectSkills, skillNameFromPath } from "./parsers/detect-skills";
+export {
+  detectSkills,
+  parseSkillDescription,
+  skillNameFromPath,
+} from "./parsers/detect-skills";
 export { PiParser } from "./parsers/pi";
 export type {
   Database,
@@ -29,15 +33,19 @@ export {
   insertSession,
   listIndexedSkills,
   listSessions,
+  matchSkills,
   openDatabase,
   search,
   setMetadata,
+  skillNameExists,
+  upsertSkillCatalog,
 } from "./storage/db";
 export type {
   ParsedSession,
   SessionMetadata,
   SkillActor,
   SkillDetail,
+  SkillMatch,
   SkillUsage,
   ToolCall,
   Turn,

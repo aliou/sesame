@@ -8,6 +8,7 @@ Indexing converts Pi JSONL session files into normalized SQLite records:
 - `chunks`: searchable units derived from messages, assistant tool calls, titles, and checkpoints
 - `chunks_fts`: external-content FTS5 table over `chunks.content`
 - `session_skills`: one row per skill a session used, for skill filtering
+- `skills`: global catalog of skill description versions (one row per distinct name + description + path), feeding `skills_fts` for fuzzy skill search
 - `metadata`: key/value state such as `last_sync_at`
 - `schema_migrations`: applied migration tracking
 
@@ -146,6 +147,10 @@ Rows are de-duplicated on name + path + actor + detail, so a skill both invoked 
 
 Migration `005` adds the `actor` and `detail` columns to existing databases and backfills `actor` from the legacy `source` column (`invocation` -> `user`, `read` -> `agent`); `detail` stays `NULL` for old rows. The `source` column is left in place but no longer read.
 
+### Skill catalog
+
+Migration `006` adds the `skills` catalog and `skills_fts`. At index time each detected skill usage is upserted into the catalog (`upsertSkillCatalog`): an existing (name, description, path) triple only bumps `last_seen_at`, a new description creates a new version row. Descriptions come from the autocomplete hook's `details.description` or, for other usages, from the SKILL.md frontmatter (`parseSkillDescription`). The catalog is global, not per-session; `matchSkills` runs BM25 over `skills_fts` (name + description) and the `skillQuery` filter then restricts sessions to the matched names. An unmatched `skillQuery` matches no sessions.
+
 Tool-result bodies for `find_sessions`, `list_sessions`, and `read_session` are excluded to prevent prior session-search output from polluting the index. Their assistant tool-call arguments remain searchable.
 
 ## Search behavior
@@ -200,6 +205,15 @@ erDiagram
     text path
     text actor
     text detail
+  }
+
+  skills {
+    int id PK
+    text name
+    text description
+    text path
+    text first_seen_at
+    text last_seen_at
   }
 
   chunks_fts {

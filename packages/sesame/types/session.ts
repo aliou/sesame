@@ -58,6 +58,16 @@ export interface SkillUsage {
   actor: SkillActor;
   /** How the skill was discovered: slash (user typed /skill), autocomplete, or null (read). */
   detail?: SkillDetail;
+  /** Skill description, when known (hook details or SKILL.md frontmatter). */
+  description?: string | null;
+}
+
+/** A catalog row matched by fuzzy skill search. */
+export interface SkillMatch {
+  name: string;
+  description: string | null;
+  path: string | null;
+  score: number;
 }
 
 /** Searchable session metadata with the Pi entry that defines it. */

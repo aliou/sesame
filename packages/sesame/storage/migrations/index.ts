@@ -4,6 +4,7 @@ import addMetadata from "./002-add-metadata";
 import addTreeFields from "./003-add-tree-fields";
 import addSessionSkills from "./004-add-session-skills";
 import addSessionSkillsActorDetail from "./005-add-session-skills-actor-detail";
+import addSkillCatalog from "./006-add-skill-catalog";
 
 export interface Migration {
   id: number;
@@ -27,4 +28,5 @@ export const migrations: Migration[] = [
   addTreeFields,
   addSessionSkills,
   addSessionSkillsActorDetail,
+  addSkillCatalog,
 ];
