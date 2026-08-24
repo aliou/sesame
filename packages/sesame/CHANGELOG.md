@@ -1,5 +1,50 @@
 # @aliou/sesame
 
+## 0.12.0
+
+### Minor Changes
+
+- 5353588: Add skill-based filtering.
+
+  Sesame now records which skills each session used, from two signals: `skill-invocation` custom messages injected by the `skill-autocomplete` hook, and read tool calls that load a `SKILL.md` file. Usage is stored in a new `session_skills` table.
+
+  - `sesame search --skill <name>` filters by exact skill name (case-insensitive)
+  - `sesame search --skill-path <substring>` filters by `SKILL.md` path; combined with `--skill` both must match the same skill
+  - `sesame skills` lists indexed skills with session counts, sources, and paths
+  - Search output lists each result's skills
+  - Library adds `SearchOptions.skill` / `skillPath`, the same two options on `ListSessionsOptions`, plus `getSessionSkills`, `getSkillsForSessions`, `listIndexedSkills`, `detectSkills`, `skillNameFromPath`, and `ParsedSession.skills`
+
+  Migration 4 resets stored mtimes, so the next `sesame index` backfills skills for existing indexes.
+
+  `insertSession` now replaces an existing session inside its transaction, so an interrupted re-index can no longer leave a session deleted without a replacement.
+
+- ab12849: Search sessions by tool call parameters.
+
+  Allowlisted tool call parameters are now extracted at index time into a new `tool_call_args` table (migration 7), powering parameter-level filters:
+
+  - `SearchOptions` and `ListSessionsOptions` gain `toolArgs: ToolArgFilter[]` — each `{ tool, key, value }` filter is an `EXISTS` check (AND across filters, `value` matched as a substring)
+  - Library exports `TOOL_ARG_ALLOWLIST`, `isAllowedToolArg`, `extractToolArgs`, and the `ToolArgFilter` type
+  - CLI gains a repeatable `--arg tool:key=value` flag that validates against the allowlist (e.g. `sesame search --arg find:pattern=useStorage`)
+
+  The allowlist covers pi's native tools (`bash`, `read`, `write`, `edit`, `find`, `grep`, `ls`) plus custom harness tools (`find_sessions`, `list_sessions`, `read_session`, `read_url`, `synthetic_web_search`, `process`). Migration 7 invalidates stored mtimes so the next index backfills existing sessions.
+
+- b5e0c78: Record skill usage actor/detail and add fuzzy skill search.
+
+  `session_skills.source` is replaced by `actor` (`user` | `agent`) plus `detail` (`slash` | `autocomplete` | null). A third detection shape recognizes `/skill:name` slash invocations, where pi inlines a `<skill name= location=>` block at the start of the user message. Migration 5 backfills `actor` from the legacy `source` column.
+
+  A new global skill catalog (`skills` + `skills_fts`, migration 6) records skill description versions — one row per distinct (name, description, path), bumped on `last_seen_at` when re-encountered. Descriptions come from invocation hook details or SKILL.md frontmatter.
+
+  - `SearchOptions` / `ListSessionsOptions` gain `skillQuery` (fuzzy over name + description; an unmatched query returns no sessions)
+  - Library adds `matchSkills`, `upsertSkillCatalog`, `skillNameExists`, `parseSkillDescription`, and the `SkillMatch` type; `SkillSummary` replaces `sources` with `actors` + `details` and gains `description`
+  - `ListSkillsOptions.source` becomes `actor`
+  - CLI: `sesame search --skill <text>` falls back to fuzzy matching when the text is not an exact skill name; `sesame skills --source` becomes `--actor` and prints the latest known description
+
+### Patch Changes
+
+- 3c6c5dc: Fix indexing on databases migrated from 0.11.
+
+  Migration 5 kept the legacy `session_skills.source` column, which on migrated indexes is `TEXT NOT NULL` with no default — every session using a skill then failed to index with `NOT NULL constraint failed: session_skills.source`. Migration 8 drops the column (guarded, no-op where it is already absent). Includes a regression test that inserts a skilled session into a pre-migration database.
+
 ## 0.11.1
 
 ### Patch Changes
