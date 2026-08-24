@@ -22,6 +22,14 @@ Configuration lives at `<config-dir>/config.jsonc`, normally `~/.config/sesame/c
 }
 ```
 
+## Global options
+
+- `sesame --help` / `sesame -h` / `sesame help` / bare `sesame`: print full usage to stdout and exit 0.
+- `sesame <command> --help` / `sesame <command> -h`: print usage for that command to stdout and exit 0.
+- `sesame --version` / `sesame -V`: print the CLI version (from `packages/cli/package.json`) and exit 0. Also works after a command, e.g. `sesame search --version`.
+- Unknown command: print an error and full usage to **stderr** and exit 1.
+- Unknown flags and missing flag values fail loudly with an error to **stderr** and exit 1.
+
 ## `sesame index`
 
 Builds or updates the local index from configured Pi session paths.

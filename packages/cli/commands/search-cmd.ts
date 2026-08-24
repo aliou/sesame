@@ -14,6 +14,7 @@ import {
   skillNameExists,
   TOOL_ARG_ALLOWLIST,
 } from "@aliou/sesame";
+import { takePositiveInt, takeValue } from "./args";
 
 function normalizeScore(rawScore: number): string {
   // BM25 returns negative scores where more negative = better match
@@ -34,33 +35,38 @@ export default async function searchCommand(args: string[]): Promise<void> {
     const arg = args[i];
 
     if (arg === "--cwd") {
-      options.cwd = args[++i];
+      options.cwd = takeValue(args, i, arg);
+      i++;
     } else if (arg === "--after") {
-      const dateStr = args[++i];
-      options.after = parseRelativeDate(dateStr);
+      options.after = parseRelativeDate(takeValue(args, i, arg));
+      i++;
     } else if (arg === "--before") {
-      const dateStr = args[++i];
-      options.before = parseRelativeDate(dateStr);
+      options.before = parseRelativeDate(takeValue(args, i, arg));
+      i++;
     } else if (arg === "--limit") {
-      options.limit = Number.parseInt(args[++i], 10);
+      options.limit = takePositiveInt(args, i, arg);
+      i++;
     } else if (arg === "--tools") {
       options.toolsOnly = true;
     } else if (arg === "--tool") {
-      options.toolName = args[++i];
+      options.toolName = takeValue(args, i, arg);
+      i++;
     } else if (arg === "--path") {
-      options.pathFilter = args[++i];
+      options.pathFilter = takeValue(args, i, arg);
+      i++;
     } else if (arg === "--skill") {
-      skillInput = args[++i];
+      skillInput = takeValue(args, i, arg);
+      i++;
     } else if (arg === "--skill-path") {
-      options.skillPath = args[++i];
+      options.skillPath = takeValue(args, i, arg);
+      i++;
     } else if (arg === "--exclude") {
       options.exclude ??= [];
-      options.exclude.push(args[++i]);
+      options.exclude.push(takeValue(args, i, arg));
+      i++;
     } else if (arg === "--arg") {
-      const spec = args[++i];
-      if (!spec) {
-        throw new Error("--arg requires a value: --arg tool:key=value");
-      }
+      const spec = takeValue(args, i, arg);
+      i++;
       const colon = spec.indexOf(":");
       const equals = spec.indexOf("=", colon + 1);
       const tool = colon > 0 ? spec.slice(0, colon) : "";
@@ -92,7 +98,9 @@ export default async function searchCommand(args: string[]): Promise<void> {
       });
     } else if (arg === "--json") {
       options.json = true;
-    } else if (!arg.startsWith("-")) {
+    } else if (arg.startsWith("-")) {
+      throw new Error(`Unknown option: ${arg}`);
+    } else {
       query = arg;
     }
   }

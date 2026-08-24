@@ -39,11 +39,11 @@ export {
   skillNameExists,
   upsertSkillCatalog,
 } from "./storage/db";
+export type { ToolArgFilter } from "./tool-arg-allowlist";
 export {
   extractToolArgs,
   isAllowedToolArg,
   TOOL_ARG_ALLOWLIST,
-  ToolArgFilter,
 } from "./tool-arg-allowlist";
 export type {
   ParsedSession,

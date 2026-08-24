@@ -16,8 +16,18 @@ import {
 } from "@aliou/sesame";
 
 export default async function indexCommand(args: string[]): Promise<void> {
-  // Parse --full flag
-  const fullRebuild = args.includes("--full");
+  // Parse flags. --full is the only recognized option; anything else
+  // starting with `-` is rejected loudly per clig.dev conventions.
+  let fullRebuild = false;
+  for (const arg of args) {
+    if (arg === "--full") {
+      fullRebuild = true;
+    } else if (arg.startsWith("-")) {
+      throw new Error(`Unknown option: ${arg}`);
+    } else {
+      throw new Error(`Unexpected argument: ${arg}`);
+    }
+  }
 
   // Load configuration
   const config = await loadConfig();

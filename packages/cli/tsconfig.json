@@ -22,7 +22,7 @@
     "resolveJsonModule": true,
     "noEmit": false
   },
-  "include": ["sesame.ts", "commands/**/*"],
+  "include": ["sesame.ts", "usage.ts", "commands/**/*", "package.json"],
   "exclude": ["node_modules", "dist", "**/*.test.ts"],
   "references": [{ "path": "../sesame" }]
 }

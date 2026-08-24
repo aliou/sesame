@@ -16,6 +16,7 @@ import {
   openDatabase,
   setMetadata,
 } from "@aliou/sesame";
+import { takePositiveInt } from "./args";
 import { createReindexQueue, type SourceConfig } from "./watch-queue";
 
 interface WatchState {
@@ -28,16 +29,20 @@ interface WatchState {
 }
 
 export default async function watchCommand(args: string[]): Promise<void> {
-  // Parse --interval flag
+  // Parse options. --interval <seconds> is the only recognized flag; any
+  // other flag is rejected loudly per clig.dev conventions.
   let pollInterval: number | null = null;
-  const intervalIndex = args.indexOf("--interval");
-  if (intervalIndex !== -1 && args[intervalIndex + 1]) {
-    const intervalValue = parseInt(args[intervalIndex + 1], 10);
-    if (Number.isNaN(intervalValue) || intervalValue <= 0) {
-      console.error("Error: --interval must be a positive number");
-      process.exit(1);
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--interval") {
+      const intervalValue = takePositiveInt(args, i, arg);
+      i++;
+      pollInterval = intervalValue * 1000; // Convert to milliseconds
+    } else if (arg.startsWith("-")) {
+      throw new Error(`Unknown option: ${arg}`);
+    } else {
+      throw new Error(`Unexpected argument: ${arg}`);
     }
-    pollInterval = intervalValue * 1000; // Convert to milliseconds
   }
 
   // Load configuration

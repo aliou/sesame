@@ -9,6 +9,7 @@ import searchCommand from "./commands/search-cmd";
 import skillsCommand from "./commands/skills-cmd";
 import statusCommand from "./commands/status-cmd";
 import watchCommand from "./commands/watch-cmd";
+import { printFullUsage, printUsageFor, VERSION } from "./usage";
 
 const commands: Record<string, (args: string[]) => Promise<void>> = {
   index: indexCommand,
@@ -16,71 +17,53 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   skills: skillsCommand,
   status: statusCommand,
   watch: watchCommand,
-  help: async (_args: string[]) => {
-    printUsage();
-  },
 };
 
 type Command = keyof typeof commands;
 
-function printUsage() {
-  console.log(`Sesame - Search for coding agent sessions
+function isVersionFlag(arg: string): boolean {
+  return arg === "--version" || arg === "-V";
+}
 
-Usage: sesame <command> [options]
-
-Commands:
-  index              Index session files (incremental)
-  index --full       Drop and rebuild index
-  search [query]     Search sessions or browse recent sessions
-  skills             List skills used across indexed sessions
-  status             Show index statistics
-  watch              Watch session files and index on change
-  watch --interval <seconds>  Poll-based re-indexing at fixed interval
-
-Search options:
-  --cwd <path>       Filter by project directory
-  --after <date>     Filter sessions after date (7d, 2w, 1m, or ISO date)
-  --before <date>    Filter sessions before date
-  --limit <n>        Max results (default: 10)
-  --tools            Search only tool call chunks
-  --tool <name>      Search specific tool type
-  --path <file>      Find sessions that touched a file
-  --skill <text>     Find sessions by skill: exact name, else fuzzy over name and description
-  --arg <t:k=v>      Find sessions where tool <t> was called with param <k> matching <v> (repeatable)
-  --skill-path <s>   Find sessions that used a skill whose SKILL.md path contains <s>
-  --exclude <id>     Exclude session ID (repeatable)
-  --json             Output as JSON
-
-Skills options:
-  --cwd <path>       Filter by project directory
-  --after <date>     Filter sessions after date
-  --before <date>    Filter sessions before date
-  --actor <kind>     Filter by who used the skill: user | agent
-  --limit <n>        Max results (default: 100)
-  --json             Output as JSON
-`);
+function isHelpFlag(arg: string): boolean {
+  return arg === "--help" || arg === "-h";
 }
 
 async function main() {
   const args = process.argv.slice(2);
 
-  if (
-    args.length === 0 ||
-    args[0] === "help" ||
-    args[0] === "--help" ||
-    args[0] === "-h"
-  ) {
-    printUsage();
+  // Bare invocation or top-level help -> full usage to stdout, exit 0.
+  if (args.length === 0 || args[0] === "help" || isHelpFlag(args[0])) {
+    printFullUsage();
+    process.exit(0);
+  }
+
+  // Top-level --version / -V -> print version and exit 0.
+  if (isVersionFlag(args[0])) {
+    console.log(VERSION);
     process.exit(0);
   }
 
   const commandName = args[0] as Command;
   const commandArgs = args.slice(1);
 
+  // Unknown command -> error + hint to stderr, exit 1.
   if (!(commandName in commands)) {
     console.error(`Unknown command: ${commandName}`);
     console.error(`Run 'sesame help' for usage information.`);
     process.exit(1);
+  }
+
+  // Per-command help/version: intercept before the command parser rejects
+  // them as unknown flags. Works anywhere in the command's argv, so
+  // `sesame search --version` prints the version too.
+  if (commandArgs.some(isHelpFlag)) {
+    console.log(printUsageFor(commandName));
+    process.exit(0);
+  }
+  if (commandArgs.some(isVersionFlag)) {
+    console.log(VERSION);
+    process.exit(0);
   }
 
   try {

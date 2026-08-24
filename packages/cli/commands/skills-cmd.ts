@@ -11,6 +11,7 @@ import {
   openDatabase,
   parseRelativeDate,
 } from "@aliou/sesame";
+import { takePositiveInt, takeValue } from "./args";
 
 const MAX_DISPLAYED_PATHS = 3;
 
@@ -22,15 +23,20 @@ export default async function skillsCommand(args: string[]): Promise<void> {
     const arg = args[i];
 
     if (arg === "--cwd") {
-      options.cwd = args[++i];
+      options.cwd = takeValue(args, i, arg);
+      i++;
     } else if (arg === "--after") {
-      options.after = parseRelativeDate(args[++i]);
+      options.after = parseRelativeDate(takeValue(args, i, arg));
+      i++;
     } else if (arg === "--before") {
-      options.before = parseRelativeDate(args[++i]);
+      options.before = parseRelativeDate(takeValue(args, i, arg));
+      i++;
     } else if (arg === "--limit") {
-      options.limit = Number.parseInt(args[++i], 10);
+      options.limit = takePositiveInt(args, i, arg);
+      i++;
     } else if (arg === "--actor") {
-      const actor = args[++i];
+      const actor = takeValue(args, i, arg);
+      i++;
       if (actor !== "user" && actor !== "agent") {
         throw new Error(
           `Invalid --actor "${actor}". Expected "user" or "agent".`,

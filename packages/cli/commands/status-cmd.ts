@@ -6,7 +6,15 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { getStats, getXDGPaths, openDatabase } from "@aliou/sesame";
 
-export default async function statusCommand(_args: string[]): Promise<void> {
+export default async function statusCommand(args: string[]): Promise<void> {
+  // status takes no options; reject any flag loudly.
+  for (const arg of args) {
+    if (arg.startsWith("-")) {
+      throw new Error(`Unknown option: ${arg}`);
+    }
+    throw new Error(`Unexpected argument: ${arg}`);
+  }
+
   const paths = getXDGPaths();
   mkdirSync(paths.data, { recursive: true });
   const dbPath = join(paths.data, "index.sqlite");
