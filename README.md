@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/banner.png" alt="sesame" />
+</p>
+
 # sesame
 
 Search coding-agent sessions with local BM25 full-text search (SQLite FTS5).
