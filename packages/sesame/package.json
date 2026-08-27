@@ -1,6 +1,6 @@
 {
   "name": "@aliou/sesame",
-  "version": "0.11.1",
+  "version": "0.12.0",
   "description": "BM25 search for coding agent sessions",
   "type": "module",
   "exports": {
