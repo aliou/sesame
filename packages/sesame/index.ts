@@ -10,6 +10,11 @@ export {
   skillNameFromPath,
 } from "./parsers/detect-skills";
 export { PiParser } from "./parsers/pi";
+export {
+  AsyncSessionSearch,
+  type IndexedSessionRow,
+  type SessionReferenceRow,
+} from "./search-async";
 export type {
   Database,
   ListSessionsOptions,

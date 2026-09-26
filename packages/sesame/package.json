@@ -6,16 +6,17 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
+      "default": "./dist/index.mjs"
+    },
+    "./worker": "./dist/storage/search-worker.mjs"
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsdown index.ts --no-config --format esm --out-dir dist --clean --no-dts && tsdown storage/search-worker.ts --no-config --format esm --out-dir dist/storage --no-clean --no-dts && tsc --emitDeclarationOnly",
     "typecheck": "tsc --noEmit",
-    "test": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest run",
+    "test": "pnpm run build && NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest run",
     "prepublishOnly": "pnpm run build"
   },
   "keywords": [
@@ -37,6 +38,7 @@
   "devDependencies": {
     "@types/node": "^26.2.0",
     "memfs": "^4.68.1",
+    "tsdown": "0.23.0",
     "vitest": "^4.1.11"
   },
   "engines": {

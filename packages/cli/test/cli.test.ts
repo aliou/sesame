@@ -11,12 +11,16 @@ describe("compiled binary", () => {
 
     try {
       // Build the SEA binary into a temp directory.
-      execSync(`npx tsdown --outDir ${tmpRoot}`, {
+      execSync(`pnpm exec tsdown --outDir ${tmpRoot}`, {
         cwd: root,
         stdio: "pipe",
       });
 
-      const outFile = join(tmpRoot, "sesame");
+      const outFile = join(
+        root,
+        "dist",
+        `sesame-${process.platform}-${process.arch}`,
+      );
 
       const xdgDataHome = join(tmpRoot, "xdg-data");
       const xdgConfigHome = join(tmpRoot, "xdg-config");

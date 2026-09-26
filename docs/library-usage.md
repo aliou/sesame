@@ -17,6 +17,7 @@ Runtime requirement: Node.js 26 or newer.
 From `@aliou/sesame`:
 
 - Database/storage: `openDatabase`, `search`, `insertSession`, `deleteSession`, `dropAll`, `getSession`, `getSessionMtime`, `getStats`, `listSessions`, `setMetadata`
+- Async search: `AsyncSessionSearch` (worker-backed session search, listing, name lookup, and ID lookup)
 - Skills: `getSessionSkills`, `getSkillsForSessions`, `listIndexedSkills`, `detectSkills`, `skillNameFromPath`
 - Indexer/parser: `indexSessions`, `PiParser`
 - Config/helpers: `loadConfig`, `expandPath`, `getXDGPaths`, `parseRelativeDate`, `acquireIndexLock`
@@ -25,6 +26,30 @@ From `@aliou/sesame`:
 `getMetadata` exists internally but is not exported from the package entry point.
 
 ## Minimal search example
+
+For interactive applications, use the worker-backed API. Its SQLite connection
+and synchronous FTS queries stay off the caller's event loop:
+
+```ts
+import { AsyncSessionSearch } from "@aliou/sesame";
+
+const sessions = new AsyncSessionSearch(); // Uses SESAME_DATA_DIR / XDG data path
+try {
+  const results = await sessions.search("release workflow", { limit: 5 });
+  console.log(results);
+} finally {
+  await sessions.close();
+}
+```
+
+Pass a data directory to `new AsyncSessionSearch(dataDir)` to override the
+default index location. `search()` returns normal `SearchResult` fields plus
+`messageCount`. `list(cwd, limit?, depth?)`, `get(sessionId)`, and
+`searchNames(token, cwd?)` also run on the worker. Pass an `AbortSignal` as the
+third argument to `search()` or fourth argument to `list()` to stop waiting for
+a stale response; a SQLite query already running on the worker still completes.
+
+For scripts that do not need a responsive event loop, the synchronous API is:
 
 ```ts
 import { join } from "node:path";
