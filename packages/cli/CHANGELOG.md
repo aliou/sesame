@@ -1,5 +1,12 @@
 # @aliou/sesame-cli
 
+## 0.12.1
+
+### Patch Changes
+
+- Updated dependencies [ff23e67]
+  - @aliou/sesame@0.13.0
+
 ## 0.12.0
 
 ### Minor Changes

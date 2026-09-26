@@ -1,5 +1,11 @@
 # @aliou/sesame
 
+## 0.13.0
+
+### Minor Changes
+
+- ff23e67: Add worker-backed session search and reduce FTS snippet work for broad queries.
+
 ## 0.12.0
 
 ### Minor Changes
