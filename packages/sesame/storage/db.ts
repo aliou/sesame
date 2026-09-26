@@ -804,6 +804,7 @@ function searchFts(
   } = options;
 
   let sql = `
+    WITH scored AS (
     SELECT
       s.id as sessionId,
       s.source,
@@ -820,8 +821,7 @@ function searchFts(
         WHEN c.source_type IS NOT NULL THEN c.source_type
         ELSE c.kind
       END as matchedType,
-      bm25(chunks_fts) as score,
-      snippet(chunks_fts, 0, '', '', '...', 32) as matchedSnippet
+      bm25(chunks_fts) as score
     FROM chunks_fts
     JOIN chunks c ON c.id = chunks_fts.rowid
     JOIN sessions s ON s.id = c.session_id
@@ -880,6 +880,26 @@ function searchFts(
     }
   }
 
+  // Rank matching chunks first, then generate snippets only for the winning
+  // chunk of each returned session. Snippets are costly on large FTS matches.
+  sql += `
+    ), ranked AS (
+      SELECT scored.*,
+        ROW_NUMBER() OVER (PARTITION BY sessionId ORDER BY score, chunkId) AS rank
+      FROM scored
+    )
+    SELECT sessionId, source, path, cwd, name, createdAt, modifiedAt,
+      matchedEntryId, matchedAt, matchedType, score,
+      (SELECT snippet(chunks_fts, 0, '', '', '...', 32)
+       FROM chunks_fts
+       WHERE chunks_fts MATCH ? AND chunks_fts.rowid = ranked.chunkId) AS matchedSnippet
+    FROM ranked
+    WHERE rank = 1
+    ORDER BY score, chunkId
+    LIMIT ?
+  `;
+  params.push(ftsQuery, limit);
+
   const rows = db.prepare(sql).all(...(params as [string])) as Array<{
     sessionId: string;
     source: string;
@@ -896,31 +916,21 @@ function searchFts(
     matchedSnippet: string;
   }>;
 
-  const sessionMap = new Map<string, SearchResult>();
-  for (const row of rows) {
-    const existing = sessionMap.get(row.sessionId);
-    if (!existing || row.score < existing.score) {
-      sessionMap.set(row.sessionId, {
-        sessionId: row.sessionId,
-        source: row.source,
-        path: row.path,
-        cwd: row.cwd,
-        name: row.name,
-        score: row.score,
-        createdAt: row.createdAt,
-        modifiedAt: row.modifiedAt,
-        matchedSnippet: row.matchedSnippet,
-        matchMode,
-        matchedType: row.matchedType,
-        matchedEntryId: row.matchedEntryId,
-        matchedAt: row.matchedAt,
-      });
-    }
-  }
-
-  return Array.from(sessionMap.values())
-    .sort((a, b) => a.score - b.score)
-    .slice(0, limit);
+  return rows.map((row) => ({
+    sessionId: row.sessionId,
+    source: row.source,
+    path: row.path,
+    cwd: row.cwd,
+    name: row.name,
+    score: row.score,
+    createdAt: row.createdAt,
+    modifiedAt: row.modifiedAt,
+    matchedSnippet: row.matchedSnippet,
+    matchMode,
+    matchedType: row.matchedType,
+    matchedEntryId: row.matchedEntryId,
+    matchedAt: row.matchedAt,
+  }));
 }
 
 export function search(

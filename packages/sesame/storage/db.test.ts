@@ -381,6 +381,86 @@ describe("Database operations", () => {
     expect(results[0].sessionId).toBe("db-session");
   });
 
+  test("FTS ranks sessions by their best matching chunk before applying limit", () => {
+    db = openDatabase(dbPath);
+
+    const session = (id: string): StoredSession => ({
+      id,
+      source: "pi",
+      path: `/sessions/${id}.jsonl`,
+      cwd: "/project",
+      name: id,
+      created_at: "2026-01-01T00:00:00Z",
+      modified_at: "2026-01-01T00:00:00Z",
+      message_count: 2,
+      file_mtime: 1,
+      parent_session_id: null,
+    });
+    const chunk = (
+      sessionId: string,
+      content: string,
+      entryId: string,
+    ): StoredChunk => ({
+      id: 0,
+      session_id: sessionId,
+      kind: "message",
+      role: "user",
+      tool_name: null,
+      seq: 0,
+      content,
+      is_error: null,
+      entry_id: entryId,
+      parent_entry_id: null,
+      timestamp: null,
+      source_type: null,
+    });
+
+    insertSession(db, session("first"), [chunk("first", "alpha", "first")]);
+    insertSession(db, session("winner"), [
+      chunk("winner", "alpha with plenty of filler words", "weak"),
+      chunk("winner", "alpha alpha alpha alpha alpha", "strong"),
+    ]);
+
+    const results = search(db, "alpha", { limit: 1 });
+    expect(results).toHaveLength(1);
+    expect(results[0].sessionId).toBe("winner");
+    expect(results[0].matchedEntryId).toBe("strong");
+    expect(results[0].matchedSnippet).toContain("alpha alpha");
+  });
+
+  test("FTS chooses the first chunk when a session has equal scores", () => {
+    db = openDatabase(dbPath);
+    const session: StoredSession = {
+      id: "tie",
+      source: "pi",
+      path: "/sessions/tie.jsonl",
+      cwd: "/project",
+      name: null,
+      created_at: null,
+      modified_at: null,
+      message_count: 2,
+      file_mtime: 1,
+      parent_session_id: null,
+    };
+    const chunk: StoredChunk = {
+      id: 0,
+      session_id: "tie",
+      kind: "message",
+      role: "user",
+      tool_name: null,
+      seq: 0,
+      content: "equal alpha content",
+      is_error: null,
+      entry_id: "first",
+      parent_entry_id: null,
+      timestamp: null,
+      source_type: null,
+    };
+    insertSession(db, session, [chunk, { ...chunk, entry_id: "second" }]);
+
+    expect(search(db, "alpha")[0].matchedEntryId).toBe("first");
+  });
+
   test("search filters - cwd filter", () => {
     db = openDatabase(dbPath);
 
