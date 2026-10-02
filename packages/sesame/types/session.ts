@@ -14,6 +14,10 @@ export interface ToolCall {
   name: string;
   args: Record<string, unknown>;
   result?: string;
+  /** Name of the parent tool when this call ran nested (e.g. "codemode"). */
+  via?: string;
+  /** Status of a nested call, from pi's nestedCalls record. */
+  status?: "ok" | "error" | "unfinished" | "running" | "cancelled";
 }
 
 export interface Turn {

@@ -30,6 +30,7 @@ const SEARCH_OPTIONS = `Search options:
   --limit <n>        Max results (default: 10)
   --tools            Search only tool call chunks
   --tool <name>      Search specific tool type
+  --via <name>       Only tool calls that ran nested inside <name> (e.g. codemode)
   --path <file>      Find sessions that touched a file
   --skill <text>     Find sessions by skill: exact name, else fuzzy over name and description
   --arg <t:k=v>      Find sessions where tool <t> was called with param <k> matching <v> (repeatable)

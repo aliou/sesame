@@ -11,7 +11,7 @@ Sesame indexes coding agent sessions into SQLite FTS5 and ranks results with BM2
 
 Use **sesame** when you need:
 - Multi-word topic search (`"nix infra cleanup"`, `"publish workflow changesets"`)
-- Tool-call oriented search (`--tools`, `--tool bash`, `--path package.json`)
+- Tool-call oriented search (`--tools`, `--tool bash`, `--via codemode`, `--path package.json`)
 - Skill-oriented search (`--skill vitest`, `--skill-path /skill-library/`)
 - Session discovery / paging (no query or `"*"` with filters and `--exclude`)
 
@@ -32,6 +32,7 @@ sesame search "query" --before 2026-01-01
 sesame search "query" --limit 5
 sesame search "query" --tools
 sesame search "query" --tool bash
+sesame search "query" --tool read --via codemode
 sesame search "query" --path package.json
 sesame search "query" --skill vitest
 sesame search "query" --skill-path /skill-library/

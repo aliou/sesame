@@ -50,6 +50,7 @@ describe("AsyncSessionSearch", () => {
           kind: "message",
           role: "user",
           tool_name: null,
+          via: null,
           seq: 0,
           content: "hello worker",
           is_error: null,

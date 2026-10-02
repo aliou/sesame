@@ -39,6 +39,8 @@ export interface StoredChunk {
   kind: string; // 'message' or 'tool_call'
   role: string | null;
   tool_name: string | null;
+  /** Parent tool when this tool call ran nested (e.g. "codemode"). */
+  via: string | null;
   seq: number;
   content: string;
   is_error: number | null; // 0 = success, 1 = error, null = not applicable
@@ -118,6 +120,8 @@ export interface ListSessionsOptions {
    * names. Ignored when `skill` or `skillPath` is set.
    */
   skillQuery?: string;
+  /** Only sessions with a tool call that ran nested inside this tool. */
+  via?: string;
   /** Only sessions with a tool call matching each filter (AND semantics). */
   toolArgs?: ToolArgFilter[];
   limit?: number; // default 50
@@ -131,6 +135,8 @@ export interface SearchOptions {
   limit?: number; // default 10
   toolsOnly?: boolean;
   toolName?: string;
+  /** Only tool_call chunks that ran nested inside this tool (e.g. "codemode"). */
+  via?: string;
   pathFilter?: string;
   /** Only sessions that used this skill (exact name, case-insensitive). */
   skill?: string;
@@ -190,6 +196,7 @@ CREATE TABLE IF NOT EXISTS chunks (
   kind TEXT NOT NULL,
   role TEXT,
   tool_name TEXT,
+  via TEXT,
   seq INTEGER,
   content TEXT NOT NULL,
   is_error INTEGER DEFAULT NULL,
@@ -368,6 +375,9 @@ function ensurePostMigrationIndexes(db: Database): void {
   db.exec(
     "CREATE INDEX IF NOT EXISTS idx_session_skills_actor ON session_skills(actor)",
   );
+  // Depends on the via column, which only exists after migration 009 has
+  // run on databases that predate it.
+  db.exec("CREATE INDEX IF NOT EXISTS idx_chunks_via ON chunks(via)");
 }
 
 export function getSessionMtime(
@@ -555,8 +565,8 @@ export function insertSession(
   );
 
   const insertChunkStmt = db.prepare(
-    `INSERT INTO chunks (session_id, kind, role, tool_name, seq, content, is_error, entry_id, parent_entry_id, timestamp, source_type)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO chunks (session_id, kind, role, tool_name, via, seq, content, is_error, entry_id, parent_entry_id, timestamp, source_type)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
 
   const insertSkillStmt = db.prepare(
@@ -591,6 +601,7 @@ export function insertSession(
         chunk.kind,
         chunk.role,
         chunk.tool_name,
+        chunk.via,
         chunk.seq,
         chunk.content,
         chunk.is_error,
@@ -652,13 +663,18 @@ function listAllSessions(db: Database, options: SearchOptions): SearchResult[] {
     limit = 10,
     toolsOnly = false,
     toolName,
+    via,
     pathFilter,
     exclude,
     status,
   } = options;
 
   const needsChunkJoin =
-    toolsOnly || toolName || pathFilter || (status && (toolsOnly || toolName));
+    toolsOnly ||
+    toolName ||
+    via ||
+    pathFilter ||
+    (status && (toolsOnly || toolName));
 
   let sql: string;
   if (needsChunkJoin) {
@@ -724,6 +740,11 @@ function listAllSessions(db: Database, options: SearchOptions): SearchResult[] {
     if (toolName) {
       sql += " AND c.tool_name = ?";
       params.push(toolName);
+    }
+
+    if (via) {
+      sql += " AND c.via = ?";
+      params.push(via);
     }
 
     if (pathFilter) {
@@ -798,6 +819,7 @@ function searchFts(
     limit = 10,
     toolsOnly = false,
     toolName,
+    via,
     pathFilter,
     exclude,
     status,
@@ -854,6 +876,10 @@ function searchFts(
   if (toolName) {
     sql += " AND c.tool_name = ?";
     params.push(toolName);
+  }
+  if (via) {
+    sql += " AND c.via = ?";
+    params.push(via);
   }
   if (pathFilter) {
     sql += " AND c.kind = 'tool_call' AND c.content LIKE ?";
@@ -990,6 +1016,12 @@ export function listSessions(
   const skillFilter = skillFilterClause(db, options, "s");
   sql += skillFilter.sql;
   params.push(...skillFilter.params);
+
+  if (options.via) {
+    sql +=
+      " AND EXISTS (SELECT 1 FROM chunks cv WHERE cv.session_id = s.id AND cv.via = ?)";
+    params.push(options.via);
+  }
 
   if (options.toolArgs && options.toolArgs.length > 0) {
     for (const ta of options.toolArgs) {
@@ -1300,6 +1332,7 @@ export function dropAll(db: Database): void {
   db.exec("DROP INDEX IF EXISTS idx_chunks_session");
   db.exec("DROP INDEX IF EXISTS idx_chunks_kind");
   db.exec("DROP INDEX IF EXISTS idx_chunks_tool");
+  db.exec("DROP INDEX IF EXISTS idx_chunks_via");
   db.exec("DROP INDEX IF EXISTS idx_session_skills_session");
   db.exec("DROP INDEX IF EXISTS idx_session_skills_name");
   db.exec("DROP INDEX IF EXISTS idx_session_skills_path");

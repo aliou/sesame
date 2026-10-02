@@ -7,6 +7,7 @@ import addSessionSkillsActorDetail from "./005-add-session-skills-actor-detail";
 import addSkillCatalog from "./006-add-skill-catalog";
 import addToolCallArgs from "./007-add-tool-call-args";
 import dropSessionSkillsSource from "./008-drop-session-skills-source";
+import addChunksVia from "./009-add-chunks-via";
 
 export interface Migration {
   id: number;
@@ -33,4 +34,5 @@ export const migrations: Migration[] = [
   addSkillCatalog,
   addToolCallArgs,
   dropSessionSkillsSource,
+  addChunksVia,
 ];

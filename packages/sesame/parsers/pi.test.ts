@@ -282,6 +282,143 @@ describe("PiParser", () => {
       expect(turn.isError).toBe(true);
     });
 
+    describe("codemode nested calls", () => {
+      test("expands nestedCalls into the tool result turn's toolCalls", async () => {
+        const path = addSessionFile(
+          createSessionBuilder()
+            .withHeader()
+            .withToolCall("codemode", { code: "await tools.read({path: 'x'})" })
+            .withToolResult("codemode", "Script completed\nOutput:", {
+              nestedCalls: {
+                calls: [
+                  {
+                    id: "ctc_1/1",
+                    name: "read",
+                    arguments: { path: "/Users/x/AGENTS.md" },
+                    status: "ok",
+                  },
+                  {
+                    id: "ctc_1/2",
+                    name: "bash",
+                    arguments: { command: "git status" },
+                    status: "error",
+                  },
+                ],
+                complete: true,
+              },
+            })
+            .build(),
+        );
+
+        const session = await parser.parse(path);
+
+        const resultTurn = session.turns[1];
+        assert(resultTurn, "tool result turn should exist");
+        expect(resultTurn.role).toBe("system");
+        expect(resultTurn.toolName).toBe("codemode");
+        expect(resultTurn.toolCalls).toEqual([
+          {
+            name: "read",
+            args: { path: "/Users/x/AGENTS.md" },
+            via: "codemode",
+            status: "ok",
+          },
+          {
+            name: "bash",
+            args: { command: "git status" },
+            via: "codemode",
+            status: "error",
+          },
+        ]);
+      });
+
+      test("defaults args to {} when nested call arguments were omitted", async () => {
+        const path = addSessionFile(
+          createSessionBuilder()
+            .withHeader()
+            .withToolResult("codemode", "Script completed", {
+              nestedCalls: {
+                calls: [
+                  {
+                    id: "ctc_1/1",
+                    name: "read",
+                    argumentsBytes: 40000,
+                    status: "ok",
+                  },
+                ],
+                complete: false,
+              },
+            })
+            .build(),
+        );
+
+        const session = await parser.parse(path);
+
+        const turn = session.turns[0];
+        assert(turn, "turn should exist");
+        expect(turn.toolCalls[0]).toEqual({
+          name: "read",
+          args: {},
+          via: "codemode",
+          status: "ok",
+        });
+      });
+
+      test("falls back to details.calls when nestedCalls is absent", async () => {
+        const path = addSessionFile(
+          createSessionBuilder()
+            .withHeader()
+            .withToolResult("codemode", "Script completed", {
+              details: {
+                calls: [
+                  {
+                    name: "find",
+                    args: '{"pattern":"AGENTS.md","path":"/tmp"}',
+                    status: "ok",
+                  },
+                  { name: "get_current_time", args: "{}", status: "ok" },
+                ],
+              },
+            })
+            .build(),
+        );
+
+        const session = await parser.parse(path);
+
+        const turn = session.turns[0];
+        assert(turn, "turn should exist");
+        expect(turn.toolCalls).toEqual([
+          {
+            name: "find",
+            args: { pattern: "AGENTS.md", path: "/tmp" },
+            via: "codemode",
+            status: "ok",
+          },
+          {
+            name: "get_current_time",
+            args: {},
+            via: "codemode",
+            status: "ok",
+          },
+        ]);
+      });
+
+      test("leaves toolCalls empty for regular tool results", async () => {
+        const path = addSessionFile(
+          createSessionBuilder()
+            .withHeader()
+            .withToolResult("Read", "file content")
+            .build(),
+        );
+
+        const session = await parser.parse(path);
+
+        const turn = session.turns[0];
+        assert(turn, "turn should exist");
+        expect(turn.toolCalls).toHaveLength(0);
+      });
+    });
+
     test("parses bash executions as system turns", async () => {
       const path = addSessionFile(
         createSessionBuilder()

@@ -210,6 +210,30 @@ describe("detectReads", () => {
     expect(skills[0].detail).toBeNull();
   });
 
+  it("detects reads that ran nested inside codemode", () => {
+    const turn: Turn = {
+      role: "system",
+      textContent: "Script completed",
+      codeBlocks: [],
+      toolName: "codemode",
+      toolCalls: [
+        {
+          name: "read",
+          args: { path: "/skills/vitest/SKILL.md" },
+          via: "codemode",
+          status: "ok",
+        },
+      ],
+    };
+
+    const skills = detectSkills([turn]);
+    expect(skills).toHaveLength(1);
+    expect(skills[0].name).toBe("vitest");
+    expect(skills[0].path).toBe("/skills/vitest/SKILL.md");
+    expect(skills[0].actor).toBe("agent");
+    expect(skills[0].detail).toBeNull();
+  });
+
   it("detects view with filePath", () => {
     const turn: Turn = {
       role: "assistant",

@@ -17,7 +17,20 @@ export interface SessionBuilder {
   withToolResult(
     toolName: string,
     content: string,
-    options?: { isError?: boolean },
+    options?: {
+      isError?: boolean;
+      nestedCalls?: {
+        calls: Array<{
+          id: string;
+          name: string;
+          arguments?: Record<string, unknown>;
+          argumentsBytes?: number;
+          status: "ok" | "error" | "unfinished";
+        }>;
+        complete: boolean;
+      };
+      details?: unknown;
+    },
   ): SessionBuilder;
   withBashExecution(command: string, output: string): SessionBuilder;
   withSkillInvocation(
@@ -152,11 +165,7 @@ export function createSessionBuilder(): SessionBuilder {
       return this;
     },
 
-    withToolResult(
-      toolName: string,
-      content: string,
-      options?: { isError?: boolean },
-    ) {
+    withToolResult(toolName, content, options) {
       lines.push(
         JSON.stringify({
           type: "message",
@@ -166,6 +175,10 @@ export function createSessionBuilder(): SessionBuilder {
             toolName,
             isError: options?.isError ?? false,
             content: [{ type: "text", text: content }],
+            ...(options?.nestedCalls
+              ? { nestedCalls: options.nestedCalls }
+              : {}),
+            ...(options?.details ? { details: options.details } : {}),
           },
         }),
       );

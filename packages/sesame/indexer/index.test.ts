@@ -346,6 +346,243 @@ describe("indexer", () => {
     });
   });
 
+  describe("codemode nested calls", () => {
+    test("indexes nested calls as tool_call chunks with via and filterable args", async () => {
+      const filePath = addFile(
+        "/tmp/sesame-sessions/codemode.jsonl",
+        createSessionBuilder()
+          .withHeader({ id: "codemode" })
+          .withToolCall("codemode", {
+            code: "await tools.read({path: '/x/README.md'})",
+          })
+          .withToolResult("codemode", "Script completed\nOutput:", {
+            nestedCalls: {
+              calls: [
+                {
+                  id: "ctc_1/1",
+                  name: "read",
+                  arguments: { path: "/x/README.md" },
+                  status: "ok",
+                },
+                {
+                  id: "ctc_1/2",
+                  name: "bash",
+                  arguments: { command: "make test" },
+                  status: "error",
+                },
+              ],
+              complete: true,
+            },
+          })
+          .build(),
+      );
+
+      await indexFile(db, filePath);
+
+      const chunks = db
+        .prepare(
+          "SELECT kind, tool_name, via, is_error, content FROM chunks WHERE session_id = ? AND kind = 'tool_call' ORDER BY seq",
+        )
+        .all("codemode") as Array<{
+        kind: string;
+        tool_name: string;
+        via: string | null;
+        is_error: number | null;
+        content: string;
+      }>;
+
+      // The codemode call itself, then one chunk per nested call.
+      expect(chunks).toHaveLength(3);
+      expect(chunks[0].tool_name).toBe("codemode");
+      expect(chunks[0].via).toBeNull();
+      expect(chunks[0].content).toContain(
+        "code:\nawait tools.read({path: '/x/README.md'})",
+      );
+
+      expect(chunks[1]).toMatchObject({
+        tool_name: "read",
+        via: "codemode",
+        is_error: 0,
+      });
+      expect(chunks[1].content).toContain("via: codemode");
+      expect(chunks[1].content).toContain("path: /x/README.md");
+
+      expect(chunks[2]).toMatchObject({
+        tool_name: "bash",
+        via: "codemode",
+        is_error: 1,
+      });
+      expect(chunks[2].content).toContain("status: error");
+
+      const toolArgs = db
+        .prepare(
+          `SELECT ta.key, ta.value FROM tool_call_args ta
+           JOIN chunks c ON c.id = ta.chunk_id
+           WHERE c.session_id = ? AND c.tool_name = 'read'`,
+        )
+        .all("codemode") as Array<{ key: string; value: string }>;
+      expect(toolArgs).toEqual([{ key: "path", value: "/x/README.md" }]);
+    });
+
+    test("via filter matches sessions with nested calls", async () => {
+      addFile(
+        "/tmp/sesame-sessions/nested.jsonl",
+        createSessionBuilder()
+          .withHeader({ id: "nested" })
+          .withToolResult("codemode", "Script completed", {
+            nestedCalls: {
+              calls: [
+                {
+                  id: "ctc_1/1",
+                  name: "read",
+                  arguments: { path: "/x/AGENTS.md" },
+                  status: "ok",
+                },
+              ],
+              complete: true,
+            },
+          })
+          .build(),
+      );
+      addFile(
+        "/tmp/sesame-sessions/toplevel.jsonl",
+        createSessionBuilder()
+          .withHeader({ id: "toplevel" })
+          .withToolCall("read", { path: "/x/AGENTS.md" })
+          .build(),
+      );
+
+      await indexSessions(db, "/tmp/sesame-sessions");
+
+      const viaResults = search(db, "AGENTS", { via: "codemode" });
+      expect(viaResults.map((r) => r.sessionId)).toEqual(["nested"]);
+
+      const toolResults = search(db, "AGENTS", {
+        toolsOnly: true,
+        toolName: "read",
+      });
+      expect(toolResults.map((r) => r.sessionId).sort()).toEqual([
+        "nested",
+        "toplevel",
+      ]);
+
+      const argResults = search(db, "*", {
+        toolArgs: [{ tool: "read", key: "path", value: "AGENTS.md" }],
+      });
+      expect(argResults.map((r) => r.sessionId).sort()).toEqual([
+        "nested",
+        "toplevel",
+      ]);
+    });
+
+    test("keeps assistant text that only invokes discovery tools", async () => {
+      const filePath = addFile(
+        "/tmp/sesame-sessions/assistant-discovery.jsonl",
+        createSessionBuilder()
+          .withHeader({ id: "assistant-discovery" })
+          .withAssistantMessage("Let me look up that session.")
+          .withToolCall("find_sessions", { query: "database migrations" })
+          .build(),
+      );
+
+      await indexFile(db, filePath);
+
+      const contents = (
+        db
+          .prepare("SELECT content FROM chunks WHERE session_id = ?")
+          .all("assistant-discovery") as Array<{ content: string }>
+      ).map((chunk) => chunk.content);
+
+      expect(contents.join("\n")).toContain("Let me look up that session.");
+    });
+
+    test("stores null is_error for unfinished nested calls", async () => {
+      const filePath = addFile(
+        "/tmp/sesame-sessions/unfinished.jsonl",
+        createSessionBuilder()
+          .withHeader({ id: "unfinished" })
+          .withToolResult("codemode", "Script failed", {
+            isError: true,
+            nestedCalls: {
+              calls: [
+                {
+                  id: "ctc_1/1",
+                  name: "bash",
+                  arguments: { command: "sleep 99" },
+                  status: "unfinished",
+                },
+              ],
+              complete: false,
+            },
+          })
+          .build(),
+      );
+
+      await indexFile(db, filePath);
+
+      const chunk = db
+        .prepare(
+          "SELECT is_error FROM chunks WHERE session_id = ? AND kind = 'tool_call' AND tool_name = 'bash'",
+        )
+        .get("unfinished") as { is_error: number | null };
+      expect(chunk.is_error).toBeNull();
+    });
+
+    test("suppresses codemode results that only wrap discovery tools", async () => {
+      const filePath = addFile(
+        "/tmp/sesame-sessions/discovery.jsonl",
+        createSessionBuilder()
+          .withHeader({ id: "discovery" })
+          .withToolResult("codemode", "Secret nested discovery result", {
+            nestedCalls: {
+              calls: [
+                {
+                  id: "ctc_1/1",
+                  name: "find_sessions",
+                  arguments: { query: "database" },
+                  status: "ok",
+                },
+              ],
+              complete: true,
+            },
+          })
+          .withToolResult("codemode", "Mixed result stays searchable", {
+            nestedCalls: {
+              calls: [
+                {
+                  id: "ctc_2/1",
+                  name: "read_session",
+                  arguments: { goal: "x" },
+                  status: "ok",
+                },
+                {
+                  id: "ctc_2/2",
+                  name: "read",
+                  arguments: { path: "/x/README.md" },
+                  status: "ok",
+                },
+              ],
+              complete: true,
+            },
+          })
+          .build(),
+      );
+
+      await indexFile(db, filePath);
+
+      const contents = (
+        db
+          .prepare("SELECT content FROM chunks WHERE session_id = ?")
+          .all("discovery") as Array<{ content: string }>
+      ).map((chunk) => chunk.content);
+
+      expect(contents.join("\n")).not.toContain(
+        "Secret nested discovery result",
+      );
+      expect(contents.join("\n")).toContain("Mixed result stays searchable");
+    });
+  });
+
   describe("skill indexing", () => {
     test("records injected skill invocations and SKILL.md reads", async () => {
       addFile(

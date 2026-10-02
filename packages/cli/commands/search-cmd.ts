@@ -51,6 +51,9 @@ export default async function searchCommand(args: string[]): Promise<void> {
     } else if (arg === "--tool") {
       options.toolName = takeValue(args, i, arg);
       i++;
+    } else if (arg === "--via") {
+      options.via = takeValue(args, i, arg);
+      i++;
     } else if (arg === "--path") {
       options.pathFilter = takeValue(args, i, arg);
       i++;

@@ -94,6 +94,32 @@ interface AssistantMessage {
   };
 }
 
+/** A nested tool call recorded on a tool result (pi >= 0.99 codemode). */
+interface NestedToolCallRecord {
+  id: string;
+  name: string;
+  /** Parsed arguments; omitted (replaced by argumentsBytes) over size limits. */
+  arguments?: Record<string, unknown>;
+  argumentsBytes?: number;
+  status: "ok" | "error" | "unfinished";
+  durationMs?: number;
+  error?: string;
+}
+
+interface NestedToolCalls {
+  calls: NestedToolCallRecord[];
+  complete: boolean;
+}
+
+/** Display-oriented details.codemode payload; args is a truncated JSON string. */
+interface CodemodeToolDetails {
+  calls?: Array<{
+    name: string;
+    args?: string;
+    status?: string;
+  }>;
+}
+
 interface ToolResultMessage {
   type: "message";
   id: string;
@@ -105,6 +131,8 @@ interface ToolResultMessage {
     toolName: string;
     isError?: boolean;
     content: ContentBlock[];
+    details?: CodemodeToolDetails;
+    nestedCalls?: NestedToolCalls;
     timestamp?: number;
   };
 }
@@ -232,6 +260,49 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+function parseNestedArgs(args: string | undefined): Record<string, unknown> {
+  if (!args) {
+    return {};
+  }
+  try {
+    return asRecord(JSON.parse(args)) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Expand nested tool calls recorded on a tool result into regular ToolCall
+ * entries tagged with the parent tool name. Pi records these on any tool that
+ * runs other tools internally (codemode scripts, subagents) since 0.99.
+ *
+ * Prefers `nestedCalls` (parsed argument objects, status per call); falls
+ * back to parsing the `details.calls[].args` JSON strings when nestedCalls
+ * is absent.
+ */
+function expandNestedCalls(message: ToolResultMessage["message"]): ToolCall[] {
+  const nested = message.nestedCalls;
+  if (nested && nested.calls.length > 0) {
+    return nested.calls.map((call) => ({
+      name: call.name,
+      args: call.arguments ?? {},
+      via: message.toolName,
+      status: call.status,
+    }));
+  }
+
+  const detailCalls = message.details?.calls;
+  if (!detailCalls || detailCalls.length === 0) {
+    return [];
+  }
+  return detailCalls.map((call) => ({
+    name: call.name,
+    args: parseNestedArgs(call.args),
+    via: message.toolName,
+    status: call.status as ToolCall["status"],
+  }));
 }
 
 function extractSessionIdFromPath(path: string): string | undefined {
@@ -384,7 +455,7 @@ export class PiParser {
                 role: "system",
                 textContent,
                 codeBlocks: [],
-                toolCalls: [],
+                toolCalls: expandNestedCalls(toolResultMsg.message),
                 toolName: toolResultMsg.message.toolName,
                 isError: toolResultMsg.message.isError ?? false,
                 ...baseTurn,

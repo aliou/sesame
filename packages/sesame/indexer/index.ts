@@ -13,7 +13,7 @@ import {
   upsertSkillCatalog,
 } from "../storage/db";
 import { extractToolArgs } from "../tool-arg-allowlist";
-import type { SkillUsage } from "../types/session";
+import type { SkillUsage, Turn } from "../types/session";
 import { readFirstLine } from "../utils/io";
 import { formatToolCall } from "./format-tool-call";
 
@@ -52,8 +52,23 @@ const DISCOVERY_TOOLS = new Set([
   "read_session",
 ]);
 
-function isDiscoveryToolResult(toolName: string | undefined): boolean {
-  return toolName !== undefined && DISCOVERY_TOOLS.has(toolName.toLowerCase());
+function isDiscoveryToolResult(turn: Turn): boolean {
+  // Only tool-result turns carry a tool name; assistant turns that invoke
+  // discovery tools keep their text indexed.
+  if (turn.toolName === undefined) {
+    return false;
+  }
+  if (DISCOVERY_TOOLS.has(turn.toolName.toLowerCase())) {
+    return true;
+  }
+  // Tools that run other tools internally (codemode) bundle nested results
+  // into their own result message: suppress it when every nested call is a
+  // discovery tool, so sesame doesn't index its own output.
+  const nestedCalls = turn.toolCalls.filter((tc) => tc.via !== undefined);
+  if (nestedCalls.length === 0) {
+    return false;
+  }
+  return nestedCalls.every((tc) => DISCOVERY_TOOLS.has(tc.name.toLowerCase()));
 }
 
 /**
@@ -120,13 +135,14 @@ async function indexKnownFile(
     let seq = 0;
     for (const turn of parsedSession.turns) {
       // Message chunk
-      if (turn.textContent.trim() && !isDiscoveryToolResult(turn.toolName)) {
+      if (turn.textContent.trim() && !isDiscoveryToolResult(turn)) {
         chunks.push({
           id: 0,
           session_id: parsedSession.id,
           kind: "message",
           role: turn.role,
           tool_name: turn.toolName ?? null,
+          via: null,
           seq: seq++,
           content: turn.textContent,
           is_error: turn.isError !== undefined ? (turn.isError ? 1 : 0) : null,
@@ -148,9 +164,10 @@ async function indexKnownFile(
             kind: "tool_call",
             role: null,
             tool_name: tc.name,
+            via: tc.via ?? null,
             seq: seq++,
             content,
-            is_error: null,
+            is_error: tc.status === "ok" ? 0 : tc.status === "error" ? 1 : null,
             entry_id: turn.entryId ?? null,
             parent_entry_id: turn.parentEntryId ?? null,
             timestamp: turn.timestamp ?? null,
@@ -170,6 +187,7 @@ async function indexKnownFile(
         kind: "metadata",
         role: null,
         tool_name: null,
+        via: null,
         seq: seq++,
         content: `${prefix}: ${metadata.textContent}`,
         is_error: null,

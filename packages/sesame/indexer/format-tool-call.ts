@@ -24,8 +24,7 @@ export function formatToolCall(tc: ToolCall): string {
         "file_content",
         "fileContent",
       ]);
-      return buildText([
-        `tool: ${tc.name}`,
+      return buildText(tc, [
         path ? `path: ${path}` : null,
         content ? `content:\n${content}` : null,
         tc.result ? `result:\n${tc.result}` : null,
@@ -49,8 +48,7 @@ export function formatToolCall(tc: ToolCall): string {
         "new_string",
         "replace",
       ]);
-      return buildText([
-        `tool: ${tc.name}`,
+      return buildText(tc, [
         path ? `path: ${path}` : null,
         oldText ? `old:\n${oldText}` : null,
         newText ? `new:\n${newText}` : null,
@@ -63,8 +61,7 @@ export function formatToolCall(tc: ToolCall): string {
     case "run_command": {
       const command = extractArg(tc, ["command", "cmd", "script"]);
       const output = tc.result;
-      return buildText([
-        `tool: ${tc.name}`,
+      return buildText(tc, [
         command ? `command: ${command}` : null,
         output ? `output:\n${output}` : null,
       ]);
@@ -73,10 +70,17 @@ export function formatToolCall(tc: ToolCall): string {
     case "read":
     case "read_file": {
       const path = extractArg(tc, ["path", "file_path", "filePath"]);
-      return buildText([
-        `tool: ${tc.name}`,
+      return buildText(tc, [
         path ? `path: ${path}` : null,
         tc.result ? `content:\n${tc.result}` : null,
+      ]);
+    }
+
+    case "codemode": {
+      const code = extractArg(tc, ["code"]);
+      return buildText(tc, [
+        code ? `code:\n${code}` : null,
+        tc.result ? `result:\n${tc.result}` : null,
       ]);
     }
 
@@ -87,8 +91,7 @@ export function formatToolCall(tc: ToolCall): string {
           ([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`,
         )
         .join("\n");
-      return buildText([
-        `tool: ${tc.name}`,
+      return buildText(tc, [
         argsText || null,
         tc.result ? `result:\n${tc.result}` : null,
       ]);
@@ -117,6 +120,11 @@ function extractArg(tc: ToolCall, keys: string[]): string | null {
   return null;
 }
 
-function buildText(parts: (string | null)[]): string {
-  return parts.filter(Boolean).join("\n");
+function buildText(tc: ToolCall, parts: (string | null)[]): string {
+  const header = [
+    `tool: ${tc.name}`,
+    tc.via ? `via: ${tc.via}` : null,
+    tc.status && tc.status !== "ok" ? `status: ${tc.status}` : null,
+  ];
+  return [...header, ...parts].filter(Boolean).join("\n");
 }
