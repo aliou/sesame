@@ -403,6 +403,57 @@ describe("PiParser", () => {
         ]);
       });
 
+      test("ignores details.calls from non-codemode tools (mcpScript shape)", async () => {
+        const path = addSessionFile(
+          createSessionBuilder()
+            .withHeader()
+            .withToolResult("mcpScript", "Script completed", {
+              details: {
+                mode: "script",
+                calls: [
+                  { operation: "call", path: "notion_notion-fetch", ok: true },
+                ],
+              },
+            })
+            .build(),
+        );
+
+        const session = await parser.parse(path);
+
+        const turn = session.turns[0];
+        assert(turn, "turn should exist");
+        expect(turn.toolCalls).toHaveLength(0);
+      });
+
+      test("skips nested call records without a name", async () => {
+        const path = addSessionFile(
+          createSessionBuilder()
+            .withHeader()
+            .withToolResult("codemode", "Script completed", {
+              nestedCalls: {
+                calls: [
+                  { id: "ctc_1/1", status: "ok" } as never,
+                  {
+                    id: "ctc_1/2",
+                    name: "read",
+                    arguments: { path: "/x" },
+                    status: "ok" as const,
+                  },
+                ],
+                complete: true,
+              },
+            })
+            .build(),
+        );
+
+        const session = await parser.parse(path);
+
+        const turn = session.turns[0];
+        assert(turn, "turn should exist");
+        expect(turn.toolCalls).toHaveLength(1);
+        expect(turn.toolCalls[0]?.name).toBe("read");
+      });
+
       test("leaves toolCalls empty for regular tool results", async () => {
         const path = addSessionFile(
           createSessionBuilder()

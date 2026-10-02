@@ -275,34 +275,42 @@ function parseNestedArgs(args: string | undefined): Record<string, unknown> {
 
 /**
  * Expand nested tool calls recorded on a tool result into regular ToolCall
- * entries tagged with the parent tool name. Pi records these on any tool that
- * runs other tools internally (codemode scripts, subagents) since 0.99.
+ * entries tagged with the parent tool name. Pi records `nestedCalls` on any
+ * tool that runs other tools internally (codemode scripts, subagents) since
+ * 0.99. Records without a string name are skipped defensively.
  *
- * Prefers `nestedCalls` (parsed argument objects, status per call); falls
- * back to parsing the `details.calls[].args` JSON strings when nestedCalls
- * is absent.
+ * The `details.calls` fallback only applies to codemode: other tools reuse
+ * that field with incompatible shapes (e.g. mcpScript uses
+ * `{operation, path, ok}`).
  */
 function expandNestedCalls(message: ToolResultMessage["message"]): ToolCall[] {
   const nested = message.nestedCalls;
   if (nested && nested.calls.length > 0) {
-    return nested.calls.map((call) => ({
-      name: call.name,
-      args: call.arguments ?? {},
-      via: message.toolName,
-      status: call.status,
-    }));
+    return nested.calls
+      .filter((call) => typeof call.name === "string")
+      .map((call) => ({
+        name: call.name,
+        args: call.arguments ?? {},
+        via: message.toolName,
+        status: call.status,
+      }));
   }
 
+  if (message.toolName !== "codemode") {
+    return [];
+  }
   const detailCalls = message.details?.calls;
   if (!detailCalls || detailCalls.length === 0) {
     return [];
   }
-  return detailCalls.map((call) => ({
-    name: call.name,
-    args: parseNestedArgs(call.args),
-    via: message.toolName,
-    status: call.status as ToolCall["status"],
-  }));
+  return detailCalls
+    .filter((call) => typeof call.name === "string")
+    .map((call) => ({
+      name: call.name,
+      args: parseNestedArgs(call.args),
+      via: message.toolName,
+      status: call.status as ToolCall["status"],
+    }));
 }
 
 function extractSessionIdFromPath(path: string): string | undefined {
