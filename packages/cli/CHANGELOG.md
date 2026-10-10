@@ -1,5 +1,36 @@
 # @aliou/sesame-cli
 
+## 0.14.0
+
+### Minor Changes
+
+- d523bba: Rewrite the CLI layer on Brocli, following clig.dev and the sbxctl conventions.
+
+  New:
+
+  - Global flags on every command, before or after it: `-o/--output human|json` (`-j`/`--json` alias), `--pretty`, `--compact`, `-q/--quiet`, `--no-color` (also `NO_COLOR`), `--debug`.
+  - `-o json` for `index`, `status`, and `watch`, in addition to `search` and `skills`.
+  - `sesame help <topic>` for `config`, `json`, `exit-codes`, `completion`, `agent-guide`.
+  - Shell completion: `sesame completion <bash|zsh|fish|powershell>`, with skill names from the local index for `--skill`. The Nix package installs the bash, zsh, and fish scripts.
+  - `--flag=value` syntax, and a stderr hint to run `sesame index` when a search finds nothing in an empty index.
+
+  Breaking:
+
+  - Usage errors exit 2 instead of 1. `sesame index` exits 3 when some session files fail to index.
+  - Errors print as `CODE: message`, or as `{"error":{"code","message"}}` on stderr in JSON mode.
+  - `-V` is gone. Use `-v` or `--version`.
+  - `sesame search a b` is a usage error. Quote multi-word queries.
+  - JSON output is single-line when piped. Use `--pretty` to indent.
+  - `sesame index` writes progress to stderr. Its stdout summary is now aligned fields.
+  - `sesame watch` prints a text line per event on stdout by default. Use `-o json` for the previous one-JSON-object-per-line output.
+  - `sesame status` output is now aligned fields.
+
+### Patch Changes
+
+- c0eeb57: Handle current pi session files. Edit tool calls now index the old and new text of every entry in pi's `edits[]` array; before, only the path was indexed. The `powershell` tool is formatted like `bash` and accepts `--arg powershell:command=...`. `usage` and `context_edit` entries are skipped without "Unknown line type" warnings, and `system` role messages (system prompt snapshots) are skipped explicitly. Messages with `null` content and `session_info` entries without a name no longer drop the line. Re-index with `sesame index --full` to backfill edit text for existing sessions.
+- Updated dependencies [c0eeb57]
+  - @aliou/sesame@0.14.2
+
 ## 0.13.1
 
 ### Patch Changes
