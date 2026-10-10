@@ -72,7 +72,7 @@ This keeps indexing fast for large session directories while keeping FTS state c
 
 - session header: `id`, `cwd`, `timestamp`
 - parent session id from `parentSession`, by extracting the UUID from the referenced path
-- current session name from the final `session_info.name`; blank names clear it
+- current session name from the final `session_info.name`; blank or omitted names clear it
 - active checkpoint labels, resolved to their target entry metadata; blank or omitted labels remove a checkpoint
 - user text messages
 - assistant text messages
@@ -90,9 +90,12 @@ Skipped entries:
 - `model_change`
 - `thinking_level_change`
 - `custom`
+- `usage` (token usage outside assistant turns, such as prompt cache warming)
+- `context_edit`, because sesame indexes the transcript as written, not the model's edited view of it
+- `message` entries with role `system` (system prompt snapshots), because they repeat the same prompt in every session
 - image and thinking content blocks inside messages, because only text blocks are indexed today
 
-Malformed JSONL lines are warned and skipped; parsing continues for the rest of the file.
+Messages with `null` content are kept as empty turns, matching pi's own tolerance for old or hand-edited files. Malformed JSONL lines are warned and skipped; parsing continues for the rest of the file.
 
 ## Chunking
 
@@ -125,8 +128,8 @@ Nested calls are expanded from the `nestedCalls` record pi attaches to the paren
 Formatter behavior:
 
 - write/create tools: tool name, path, content, optional result
-- edit tools: tool name, path, old text, new text, optional result
-- bash/shell/run_command: tool name, command, optional output
+- edit tools: tool name, path, then old and new text for each replacement (pi's `edits[]` array, or one legacy top-level pair), optional result
+- bash/shell/powershell/run_command: tool name, command, optional output
 - read tools: tool name, path, optional content
 - codemode: tool name, JS source from the `code` argument
 - generic tools: tool name, serialized args, optional result

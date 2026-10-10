@@ -73,6 +73,7 @@ describe("extractToolArgs", () => {
       "grep",
       "list_sessions",
       "ls",
+      "powershell",
       "process",
       "read",
       "read_session",

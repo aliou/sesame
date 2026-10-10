@@ -1,6 +1,7 @@
 /** Allowlist of tool @param names that are filterable in queries. */
 export const TOOL_ARG_ALLOWLIST: Record<string, readonly string[]> = {
   bash: ["command"],
+  powershell: ["command"],
   read: ["path"],
   write: ["path"],
   edit: ["path"],

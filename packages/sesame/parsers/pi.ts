@@ -24,7 +24,8 @@ interface SessionHeader {
 
 interface SessionInfo {
   type: "session_info";
-  name: string;
+  /** Optional since pi's SessionInfoEntry made it optional. */
+  name?: string;
   id?: string;
   parentId?: string | null;
   timestamp?: string;
@@ -66,7 +67,8 @@ interface UserMessage {
   timestamp: string;
   message: {
     role: "user";
-    content: string | ContentBlock[];
+    /** Pi tolerates null content from old, forked, or hand-edited files. */
+    content: string | ContentBlock[] | null;
     timestamp?: number;
   };
 }
@@ -78,7 +80,7 @@ interface AssistantMessage {
   timestamp: string;
   message: {
     role: "assistant";
-    content: ContentBlock[];
+    content: ContentBlock[] | null;
     provider?: string;
     model?: string;
     usage?: {
@@ -130,7 +132,7 @@ interface ToolResultMessage {
     toolCallId: string;
     toolName: string;
     isError?: boolean;
-    content: ContentBlock[];
+    content: ContentBlock[] | null;
     details?: CodemodeToolDetails;
     nestedCalls?: NestedToolCalls;
     timestamp?: number;
@@ -149,6 +151,23 @@ interface BashExecutionMessage {
     exitCode?: number;
     cancelled?: boolean;
     truncated?: boolean;
+    timestamp?: number;
+  };
+}
+
+/**
+ * System prompt snapshot (pi >= 1.0 mid-conversation system messages). The
+ * leading one carries the full prompt; later ones change sections or tools.
+ * Not indexed: it repeats the same prompt boilerplate in every session.
+ */
+interface SystemMessage {
+  type: "message";
+  id: string;
+  parentId: string | null;
+  timestamp: string;
+  message: {
+    role: "system";
+    content: string | TextContent[] | null;
     timestamp?: number;
   };
 }
@@ -218,6 +237,29 @@ interface LabelEntry {
   label?: string;
 }
 
+/** Token usage outside assistant turns, e.g. prompt cache warming. */
+interface UsageEntry {
+  type: "usage";
+  id: string;
+  parentId: string | null;
+  timestamp: string;
+  kind: string;
+}
+
+/**
+ * Append-only edit to an earlier entry's model context. A null replacement
+ * omits the target from context. Not indexed: sesame keeps the transcript as
+ * it was written, not the model's projected view of it.
+ */
+interface ContextEditEntry {
+  type: "context_edit";
+  id: string;
+  parentId: string | null;
+  timestamp: string;
+  targetId: string;
+  replacement: { content: string | ContentBlock[] } | null;
+}
+
 interface EntryMetadata {
   entryId: string;
   parentEntryId?: string;
@@ -231,22 +273,27 @@ type JSONLLine =
   | AssistantMessage
   | ToolResultMessage
   | BashExecutionMessage
+  | SystemMessage
   | CompactionEntry
   | BranchSummaryEntry
   | CustomEntry
   | CustomMessageEntry
   | ModelChangeEntry
   | ThinkingLevelChangeEntry
-  | LabelEntry;
+  | LabelEntry
+  | UsageEntry
+  | ContextEditEntry;
 
 /**
  * Extract text content from content blocks
  */
-function extractTextContent(content: string | ContentBlock[]): string {
+function extractTextContent(
+  content: string | ContentBlock[] | null | undefined,
+): string {
   if (typeof content === "string") {
     return content;
   }
-  return content
+  return (content ?? [])
     .filter((c): c is TextContent => c.type === "text")
     .map((c) => c.text)
     .join("\n");
@@ -380,7 +427,7 @@ export class PiParser {
 
           case "session_info": {
             const info = parsed as SessionInfo;
-            const name = info.name.trim();
+            const name = info.name?.trim() ?? "";
             sessionName = name || undefined;
             title = name
               ? {
@@ -434,10 +481,11 @@ export class PiParser {
               });
             } else if (msg.message.role === "assistant") {
               const assistantMsg = msg as AssistantMessage;
-              const textBlocks = assistantMsg.message.content.filter(
+              const content = assistantMsg.message.content ?? [];
+              const textBlocks = content.filter(
                 (c): c is TextContent => c.type === "text",
               );
-              const toolCallBlocks = assistantMsg.message.content.filter(
+              const toolCallBlocks = content.filter(
                 (c): c is ToolCallContent => c.type === "toolCall",
               );
 
@@ -479,6 +527,7 @@ export class PiParser {
                 ...baseTurn,
               });
             }
+            // role "system" (prompt snapshots) is intentionally not indexed.
             break;
           }
 
@@ -557,7 +606,9 @@ export class PiParser {
           case "model_change":
           case "thinking_level_change":
           case "custom":
-            // Skip metadata/extension state lines (not part of LLM context)
+          case "usage":
+          case "context_edit":
+            // Skip metadata, extension state, and context-projection lines
             break;
 
           default:

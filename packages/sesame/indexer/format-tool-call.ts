@@ -1,11 +1,14 @@
 import type { ToolCall } from "../types/session";
 
+const OLD_TEXT_KEYS = ["old", "oldText", "old_text", "old_string", "search"];
+const NEW_TEXT_KEYS = ["new", "newText", "new_text", "new_string", "replace"];
+
 /**
  * Format a tool call into structured searchable text.
  *
  * Each tool type gets a specific format optimized for search:
  * - write/create: tool name + path + content
- * - edit: tool name + path + old/new
+ * - edit: tool name + path + old/new for each replacement
  * - bash: tool name + command + output
  * - read: tool name + path + content
  * - generic: tool name + args + result
@@ -34,30 +37,16 @@ export function formatToolCall(tc: ToolCall): string {
     case "edit":
     case "edit_file": {
       const path = extractArg(tc, ["path", "file_path", "filePath"]);
-      const oldText = extractArg(tc, [
-        "old",
-        "oldText",
-        "old_text",
-        "old_string",
-        "search",
-      ]);
-      const newText = extractArg(tc, [
-        "new",
-        "newText",
-        "new_text",
-        "new_string",
-        "replace",
-      ]);
       return buildText(tc, [
         path ? `path: ${path}` : null,
-        oldText ? `old:\n${oldText}` : null,
-        newText ? `new:\n${newText}` : null,
+        ...editReplacements(tc).flatMap(formatReplacement),
         tc.result ? `result:\n${tc.result}` : null,
       ]);
     }
 
     case "bash":
     case "shell":
+    case "powershell":
     case "run_command": {
       const command = extractArg(tc, ["command", "cmd", "script"]);
       const output = tc.result;
@@ -118,6 +107,32 @@ function extractArg(tc: ToolCall, keys: string[]): string | null {
     }
   }
   return null;
+}
+
+/**
+ * Replacements made by an edit call: pi's `edits[]` array (one call can
+ * change several places), or a single legacy top-level old/new pair.
+ */
+function editReplacements(tc: ToolCall): ToolCall[] {
+  const edits = tc.args.edits;
+  if (!Array.isArray(edits)) {
+    return [tc];
+  }
+  return edits
+    .filter(
+      (edit): edit is Record<string, unknown> =>
+        typeof edit === "object" && edit !== null,
+    )
+    .map((args) => ({ ...tc, args }));
+}
+
+function formatReplacement(replacement: ToolCall): (string | null)[] {
+  const oldText = extractArg(replacement, OLD_TEXT_KEYS);
+  const newText = extractArg(replacement, NEW_TEXT_KEYS);
+  return [
+    oldText ? `old:\n${oldText}` : null,
+    newText ? `new:\n${newText}` : null,
+  ];
 }
 
 function buildText(tc: ToolCall, parts: (string | null)[]): string {

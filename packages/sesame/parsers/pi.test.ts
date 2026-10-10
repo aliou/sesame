@@ -540,6 +540,97 @@ describe("PiParser", () => {
       expect(turn.textContent).toBe("Hello");
     });
 
+    test("skips usage, context_edit, and system prompt entries without warnings", async () => {
+      const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+      const path = addSessionFile(
+        [
+          JSON.stringify({
+            type: "session",
+            version: 3,
+            id: "test",
+            timestamp: new Date().toISOString(),
+          }),
+          JSON.stringify({
+            type: "message",
+            id: "sys-1",
+            parentId: null,
+            message: {
+              role: "system",
+              content: "You are an expert coding assistant.",
+              sections: { rules: "<rules>...</rules>" },
+            },
+          }),
+          JSON.stringify({
+            type: "usage",
+            id: "usage-1",
+            parentId: "sys-1",
+            kind: "cache_warm",
+            provider: "anthropic",
+            model: "claude",
+            usage: { input: 1, output: 1, totalTokens: 2 },
+          }),
+          JSON.stringify({
+            type: "message",
+            id: "user-1",
+            parentId: "usage-1",
+            message: { role: "user", content: "Hello" },
+          }),
+          JSON.stringify({
+            type: "context_edit",
+            id: "edit-1",
+            parentId: "user-1",
+            targetId: "user-1",
+            replacement: null,
+          }),
+        ].join("\n"),
+      );
+
+      const session = await parser.parse(path);
+
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
+      expect(session.turns.map((turn) => turn.textContent)).toEqual(["Hello"]);
+    });
+
+    test("keeps turns whose message content is null", async () => {
+      const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+      const path = addSessionFile(
+        [
+          JSON.stringify({
+            type: "session",
+            version: 3,
+            id: "test",
+            timestamp: new Date().toISOString(),
+          }),
+          JSON.stringify({
+            type: "message",
+            message: { role: "user", content: null },
+          }),
+          JSON.stringify({
+            type: "message",
+            message: { role: "assistant", content: null },
+          }),
+          JSON.stringify({
+            type: "message",
+            message: { role: "toolResult", toolName: "bash", content: null },
+          }),
+          JSON.stringify({ type: "session_info", id: "info-1" }),
+        ].join("\n"),
+      );
+
+      const session = await parser.parse(path);
+
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
+      expect(session.turns.map((turn) => turn.role)).toEqual([
+        "user",
+        "assistant",
+        "system",
+      ]);
+      expect(session.turns.every((turn) => turn.textContent === "")).toBe(true);
+      expect(session.name).toBeUndefined();
+    });
+
     test("handles sessions without a name", async () => {
       const path = addSessionFile(
         createSessionBuilder()
