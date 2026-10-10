@@ -10,15 +10,16 @@ describe("compiled binary", () => {
     const tmpRoot = mkdtempSync(join(tmpdir(), "sesame-sea-test-"));
 
     try {
-      // Build the SEA binary into a temp directory.
-      execSync(`pnpm exec tsdown --outDir ${tmpRoot}`, {
+      // Build the SEA binaries into dist-sea/.
+      execSync("pnpm exec tsdown", {
         cwd: root,
+        env: { ...process.env, SESAME_EXE: "1" },
         stdio: "pipe",
       });
 
       const outFile = join(
         root,
-        "dist",
+        "dist-sea",
         `sesame-${process.platform}-${process.arch}`,
       );
 
@@ -37,17 +38,23 @@ describe("compiled binary", () => {
         XDG_CACHE_HOME: xdgCacheHome,
       };
 
-      const stdout = execSync(`${outFile} status`, {
-        cwd: root,
-        env,
-        encoding: "utf-8",
-      });
+      const exec = (args: string) =>
+        execSync(`${outFile} ${args}`, { cwd: root, env, encoding: "utf-8" });
 
-      expect(stdout).toContain("Sesame Index Status");
-      expect(stdout).toContain("Sessions: 0");
-      expect(stdout).toContain("Chunks:");
-      expect(stdout).toContain("Database:");
-      expect(stdout).toContain("Last sync: never");
+      const stdout = exec("status");
+      expect(stdout).toMatch(/SESSIONS\s+0/);
+      expect(stdout).toMatch(/LAST SYNC\s+never/);
+
+      // Bundled dependencies (Brocli, tab) load inside the SEA.
+      expect(exec("--version").trim()).toMatch(/^\d+\.\d+\.\d+/);
+      expect(JSON.parse(exec("-o json status"))).toMatchObject({
+        sessionCount: 0,
+        lastSyncAt: null,
+      });
+      expect(exec("completion bash")).toContain("sesame");
+      expect(() => exec("bogus")).toThrow(
+        expect.objectContaining({ status: 2 }),
+      );
     } finally {
       rmSync(tmpRoot, { recursive: true, force: true });
     }

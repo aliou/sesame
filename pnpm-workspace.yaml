@@ -1,2 +1,6 @@
 packages:
-  - "packages/*"
+  - packages/*
+
+patchedDependencies:
+  '@bomb.sh/tab@0.0.22': patches/@bomb.sh__tab@0.0.22.patch
+  '@drizzle-team/brocli@0.12.1': patches/@drizzle-team__brocli@0.12.1.patch

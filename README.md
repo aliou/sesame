@@ -34,38 +34,40 @@ pnpm install
 pnpm run build
 ```
 
+`pnpm run build` bundles the CLI into `packages/cli/dist/sesame.cjs`. Use `pnpm run dev` to rebuild on change.
+
 Index sessions:
 
 ```bash
-pnpm run dev index
+./packages/cli/dist/sesame.cjs index
 ```
 
 Search:
 
 ```bash
-pnpm run dev search "nix infra simplify"
-pnpm run dev search "package.json exports" --tools --tool write
-pnpm run dev search "*" --skill vitest
-pnpm run dev search --after 7d
+./packages/cli/dist/sesame.cjs search "nix infra simplify"
+./packages/cli/dist/sesame.cjs search "package.json exports" --tools --tool write
+./packages/cli/dist/sesame.cjs search "*" --skill vitest
+./packages/cli/dist/sesame.cjs search --after 7d
 ```
 
 List skills used across sessions:
 
 ```bash
-pnpm run dev skills
+./packages/cli/dist/sesame.cjs skills
 ```
 
 Check index:
 
 ```bash
-pnpm run dev status
+./packages/cli/dist/sesame.cjs status
 ```
 
 Watch for changes:
 
 ```bash
-pnpm run dev watch
-pnpm run dev watch --interval 30
+./packages/cli/dist/sesame.cjs watch
+./packages/cli/dist/sesame.cjs watch --interval 30
 ```
 
 ## Configuration

@@ -1,94 +1,82 @@
 /**
- * Skills command - list skills used across indexed sessions
+ * sesame skills - list skills used across indexed sessions.
  */
 
-import { join } from "node:path";
-import {
-  getXDGPaths,
-  type ListSkillsOptions,
-  listIndexedSkills,
-  loadConfig,
-  openDatabase,
-  parseRelativeDate,
-} from "@aliou/sesame";
-import { takePositiveInt, takeValue } from "./args";
+import { listIndexedSkills, type SkillSummary } from "@aliou/sesame";
+import { command, number, string } from "@drizzle-team/brocli";
+import { loadSesameConfig, openIndex, parseDateFlag } from "../context";
+import { label } from "../kit/colors";
+import { isJson, writeHuman, writeJson } from "../kit/output";
 
 const MAX_DISPLAYED_PATHS = 3;
 
-export default async function skillsCommand(args: string[]): Promise<void> {
-  const options: ListSkillsOptions = { limit: 100 };
-  let json = false;
+type SkillsFlags = {
+  cwd?: string;
+  after?: string;
+  before?: string;
+  actor?: "user" | "agent";
+  limit: number;
+};
 
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
+export const skillsCommand = command({
+  name: "skills",
+  desc: "List skills used across indexed sessions, most used first",
+  options: {
+    cwd: string("cwd").desc("Only sessions whose cwd starts with this path"),
+    after: string("after").desc(
+      "Sessions modified after date (7d, 2w, 1m, YYYY-MM-DD)",
+    ),
+    before: string("before").desc("Sessions modified before date"),
+    actor: string("actor")
+      .enum("user", "agent")
+      .desc("Who loaded the skill: user (slash command) or agent (read)"),
+    limit: number("limit")
+      .int()
+      .min(1)
+      .default(100)
+      .desc("Max rows (capped at 1000)"),
+  },
+  handler: async (flags: SkillsFlags) => runSkills(flags),
+});
 
-    if (arg === "--cwd") {
-      options.cwd = takeValue(args, i, arg);
-      i++;
-    } else if (arg === "--after") {
-      options.after = parseRelativeDate(takeValue(args, i, arg));
-      i++;
-    } else if (arg === "--before") {
-      options.before = parseRelativeDate(takeValue(args, i, arg));
-      i++;
-    } else if (arg === "--limit") {
-      options.limit = takePositiveInt(args, i, arg);
-      i++;
-    } else if (arg === "--actor") {
-      const actor = takeValue(args, i, arg);
-      i++;
-      if (actor !== "user" && actor !== "agent") {
-        throw new Error(
-          `Invalid --actor "${actor}". Expected "user" or "agent".`,
-        );
-      }
-      options.actor = actor;
-    } else if (arg === "--json") {
-      json = true;
-    } else if (arg.startsWith("-")) {
-      throw new Error(`Unknown option: ${arg}`);
-    }
-  }
-
-  await loadConfig();
-
-  const paths = getXDGPaths();
-  const db = openDatabase(join(paths.data, "index.sqlite"));
-
+async function runSkills(flags: SkillsFlags): Promise<void> {
+  const options = {
+    cwd: flags.cwd,
+    after: parseDateFlag("--after", flags.after),
+    before: parseDateFlag("--before", flags.before),
+    actor: flags.actor,
+    limit: flags.limit,
+  };
+  await loadSesameConfig();
+  const db = openIndex();
   try {
     const skills = listIndexedSkills(db, options);
-
-    if (json) {
-      console.log(
-        JSON.stringify({ skillCount: skills.length, skills }, null, 2),
-      );
+    if (isJson()) {
+      writeJson({ skillCount: skills.length, skills });
       return;
     }
-
-    if (skills.length === 0) {
-      console.log("No skills found in the index.");
-      return;
-    }
-
-    console.log(`Found ${skills.length} skills\n`);
-    for (const skill of skills) {
-      const actors =
-        skill.actors.length > 0 ? skill.actors.join("+") : "unknown";
-      console.log(
-        `  ${skill.name} (${skill.sessionCount} sessions, ${actors})`,
-      );
-      if (skill.description) {
-        console.log(`      "${skill.description}"`);
-      }
-      for (const path of skill.paths.slice(0, MAX_DISPLAYED_PATHS)) {
-        console.log(`      ${path}`);
-      }
-      const hidden = skill.paths.length - MAX_DISPLAYED_PATHS;
-      if (hidden > 0) {
-        console.log(`      ... ${hidden} more paths (--json for all)`);
-      }
-    }
+    writeHuman(renderSkills(skills));
   } finally {
     db.close();
   }
+}
+
+export function renderSkills(skills: SkillSummary[]): string {
+  if (skills.length === 0) return "No skills found in the index.";
+  const blocks = skills.map((skill) => {
+    const actors = skill.actors.length > 0 ? skill.actors.join("+") : "unknown";
+    const lines = [
+      `${skill.name} ${label(`(${skill.sessionCount} sessions, ${actors})`)}`,
+    ];
+    if (skill.description) lines.push(`    "${skill.description}"`);
+    for (const path of skill.paths.slice(0, MAX_DISPLAYED_PATHS)) {
+      lines.push(`    ${label(path)}`);
+    }
+    const hidden = skill.paths.length - MAX_DISPLAYED_PATHS;
+    if (hidden > 0) {
+      lines.push(`    ${label(`... ${hidden} more paths (-o json for all)`)}`);
+    }
+    return lines.join("\n");
+  });
+  return `Found ${skills.length} skills\n\n${blocks.join("\n")}`;
 }

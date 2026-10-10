@@ -1,0 +1,13 @@
+diff --git a/dist/powershell-C1q3FW2e.mjs b/dist/powershell-C1q3FW2e.mjs
+index bfe3d3da6c336f831129eac39cc60896e3d8bc1e..eb18b02b4643d98ec7788a2c89adfaa16da3be3a 100644
+--- a/dist/powershell-C1q3FW2e.mjs
++++ b/dist/powershell-C1q3FW2e.mjs
+@@ -114,7 +114,7 @@ _${t}() {
+             # The description is preceded by a TAB character.
+             # For zsh's _describe, we need to use a : instead of a TAB.
+             # We first need to escape any : as part of the completion itself.
+-            comp=\${comp//:/\\:}
++            comp=\${comp//:/\\\\:}
+ 
+             local tab="$(printf '\\t')"
+             comp=\${comp//$tab/:}

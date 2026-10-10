@@ -1,59 +1,30 @@
-import * as sesameModule from "@aliou/sesame";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import searchCommand from "./search-cmd";
+import { describe, expect, test } from "vitest";
+import { parseToolArg } from "./search-cmd";
 
-vi.mock("@aliou/sesame", () => ({
-  getXDGPaths: vi.fn(() => ({
-    data: "/tmp/sesame-test-data",
-    config: "/tmp/sesame-test-config",
-    cache: "/tmp/sesame-test-cache",
-  })),
-  loadConfig: vi.fn(async () => {}),
-  openDatabase: vi.fn(() => ({
-    close: vi.fn(),
-  })),
-  parseRelativeDate: vi.fn((value: string) => value),
-  search: vi.fn(() => []),
-}));
-
-describe("search command", () => {
-  let logSpy: ReturnType<typeof vi.spyOn>;
-
-  beforeEach(() => {
-    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+describe("parseToolArg", () => {
+  test("parses tool:key=value and lowercases tool and key", () => {
+    expect(parseToolArg("Bash:Command=git push")).toEqual({
+      tool: "bash",
+      key: "command",
+      value: "git push",
+    });
   });
 
-  afterEach(() => {
-    logSpy.mockRestore();
-    vi.clearAllMocks();
+  test("keeps = inside the value", () => {
+    expect(parseToolArg("bash:command=a=b").value).toBe("a=b");
   });
 
-  test("parses repeatable --exclude flag", async () => {
-    await searchCommand([
-      "query",
-      "--exclude",
-      "session-1",
-      "--exclude",
-      "session-2",
-      "--json",
-    ]);
+  test.each(["bash", "bash:command", "bash:command=", ":command=x"])(
+    "rejects malformed %s",
+    (spec) => {
+      expect(() => parseToolArg(spec)).toThrow("expected tool:key=value");
+    },
+  );
 
-    expect(sesameModule.search).toHaveBeenCalledWith(
-      expect.anything(),
-      "query",
-      expect.objectContaining({
-        exclude: ["session-1", "session-2"],
-      }),
-    );
-  });
-
-  test("browses when options are provided without a query", async () => {
-    await searchCommand(["--after", "7d", "--json"]);
-
-    expect(sesameModule.search).toHaveBeenCalledWith(
-      expect.anything(),
-      undefined,
-      expect.objectContaining({ after: "7d" }),
+  test("rejects tools and keys outside the allowlist", () => {
+    expect(() => parseToolArg("nope:x=y")).toThrow('unknown tool "nope"');
+    expect(() => parseToolArg("bash:path=y")).toThrow(
+      'unknown parameter "path"',
     );
   });
 });

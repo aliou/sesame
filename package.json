@@ -11,7 +11,7 @@
     "build": "pnpm -r run build",
     "typecheck": "pnpm -r run typecheck",
     "build:binary": "pnpm --filter @aliou/sesame-cli run build:binary",
-    "dev": "./packages/cli/bin/sesame",
+    "dev": "pnpm --filter @aliou/sesame-cli run dev",
     "test": "pnpm -r run test",
     "test:cli": "pnpm --filter @aliou/sesame-cli run test:cli",
     "lint": "biome check",

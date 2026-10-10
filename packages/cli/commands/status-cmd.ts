@@ -1,41 +1,42 @@
 /**
- * Status command - shows index statistics
+ * sesame status - show index statistics.
  */
 
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { getStats, getXDGPaths, openDatabase } from "@aliou/sesame";
+import { getStats } from "@aliou/sesame";
+import { command } from "@drizzle-team/brocli";
+import { openIndex, sesamePaths } from "../context";
+import {
+  formatBytes,
+  isJson,
+  renderFields,
+  writeHuman,
+  writeJson,
+} from "../kit/output";
 
-export default async function statusCommand(args: string[]): Promise<void> {
-  // status takes no options; reject any flag loudly.
-  for (const arg of args) {
-    if (arg.startsWith("-")) {
-      throw new Error(`Unknown option: ${arg}`);
-    }
-    throw new Error(`Unexpected argument: ${arg}`);
-  }
+export const statusCommand = command({
+  name: "status",
+  desc: "Show index statistics and location",
+  handler: async () => runStatus(),
+});
 
-  const paths = getXDGPaths();
-  mkdirSync(paths.data, { recursive: true });
-  const dbPath = join(paths.data, "index.sqlite");
-
-  const db = openDatabase(dbPath);
-
+async function runStatus(): Promise<void> {
+  const paths = sesamePaths();
+  const db = openIndex();
   try {
     const stats = getStats(db);
-
-    // Format database size
-    const sizeMB = (stats.dbSizeBytes / (1024 * 1024)).toFixed(1);
-
-    // Format numbers with thousands separators
-    const formatNumber = (n: number) => n.toLocaleString();
-
-    console.log("Sesame Index Status");
-    console.log(`  Sessions: ${formatNumber(stats.sessionCount)}`);
-    console.log(`  Chunks:   ${formatNumber(stats.chunkCount)}`);
-    console.log(`  Database: ${sizeMB} MB`);
-    console.log(`  Last sync: ${stats.lastSyncAt ?? "never"}`);
-    console.log(`  Location: ${dbPath}`);
+    if (isJson()) {
+      writeJson({ ...stats, databasePath: paths.databasePath });
+      return;
+    }
+    writeHuman(
+      renderFields([
+        ["Sessions", stats.sessionCount.toLocaleString()],
+        ["Chunks", stats.chunkCount.toLocaleString()],
+        ["Database", formatBytes(stats.dbSizeBytes)],
+        ["Last sync", stats.lastSyncAt ?? "never"],
+        ["Location", paths.databasePath],
+      ]),
+    );
   } finally {
     db.close();
   }

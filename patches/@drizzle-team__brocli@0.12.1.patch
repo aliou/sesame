@@ -1,0 +1,54 @@
+diff --git a/index.cjs b/index.cjs
+index e55ef166e8728814c47f21f8132aff569b31c020..9fee8561d70bbe9a9b068ed4a079f33b5b92ed48 100644
+--- a/index.cjs
++++ b/index.cjs
+@@ -922,7 +922,7 @@ var parseGlobals = (command2, globals, args, cliName, cliDescription, omitKeysOf
+   for (let i = 0; i < args.length; ++i) {
+     const arg = args[i];
+     const nextArg = args[i + 1];
+-    const {
++    let {
+       data,
+       name,
+       option,
+@@ -930,6 +930,13 @@ var parseGlobals = (command2, globals, args, cliName, cliDescription, omitKeysOf
+       isHelp,
+       isVersion
+     } = parseArg(command2, optEntries, [], arg, nextArg, cliName, cliDescription);
++    // A command-level flag is not a global option, so parseArg assumes it
++    // consumes the next arg. That swallows a following global flag
++    // (`--tools --json`). Global names always start with `-`, so do not skip
++    // a next arg that looks like a flag.
++    if (skipNext && !option && nextArg !== void 0 && nextArg.startsWith("-")) {
++      skipNext = false;
++    }
+     if (skipNext) ++i;
+     if (!ignoreSpecialCases) {
+       if (isHelp) return "help";
+diff --git a/index.js b/index.js
+index 4d46d405d55e65a8727821d50cea665b81e9c236..50b160864ab61555d178739cb7fc9d4fb7cc2564 100644
+--- a/index.js
++++ b/index.js
+@@ -886,7 +886,7 @@ var parseGlobals = (command2, globals, args, cliName, cliDescription, omitKeysOf
+   for (let i = 0; i < args.length; ++i) {
+     const arg = args[i];
+     const nextArg = args[i + 1];
+-    const {
++    let {
+       data,
+       name,
+       option,
+@@ -894,6 +894,13 @@ var parseGlobals = (command2, globals, args, cliName, cliDescription, omitKeysOf
+       isHelp,
+       isVersion
+     } = parseArg(command2, optEntries, [], arg, nextArg, cliName, cliDescription);
++    // A command-level flag is not a global option, so parseArg assumes it
++    // consumes the next arg. That swallows a following global flag
++    // (`--tools --json`). Global names always start with `-`, so do not skip
++    // a next arg that looks like a flag.
++    if (skipNext && !option && nextArg !== void 0 && nextArg.startsWith("-")) {
++      skipNext = false;
++    }
+     if (skipNext) ++i;
+     if (!ignoreSpecialCases) {
+       if (isHelp) return "help";

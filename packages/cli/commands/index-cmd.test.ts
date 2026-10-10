@@ -1,50 +1,44 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import indexCommand from "./index-cmd";
+import { runCli } from "../run";
+import {
+  captureOutput,
+  cliArgv,
+  createSesameSandbox,
+  type SesameSandbox,
+} from "../testing/cli";
 
-const mockIndexSessions = vi.fn();
-const mockDropAll = vi.fn();
-const mockOpenDatabase = vi.fn();
-const mockSetMetadata = vi.fn();
-const mockLoadConfig = vi.fn();
-const mockGetXDGPaths = vi.fn();
-const mockAcquireIndexLock = vi.fn();
-
-vi.mock("@aliou/sesame", () => ({
-  PiParser: class {},
-  acquireIndexLock: (...args: unknown[]) => mockAcquireIndexLock(...args),
-  dropAll: (...args: unknown[]) => mockDropAll(...args),
-  expandPath: (path: string) => path,
-  getXDGPaths: (...args: unknown[]) => mockGetXDGPaths(...args),
-  indexSessions: (...args: unknown[]) => mockIndexSessions(...args),
-  loadConfig: (...args: unknown[]) => mockLoadConfig(...args),
-  openDatabase: (...args: unknown[]) => mockOpenDatabase(...args),
-  setMetadata: (...args: unknown[]) => mockSetMetadata(...args),
+const mocks = vi.hoisted(() => ({
+  acquireIndexLock: vi.fn(),
+  indexSessions: vi.fn(),
 }));
 
-describe("index command lock behavior", () => {
-  const db = { close: vi.fn() };
-  const release = vi.fn();
-  let logSpy: ReturnType<typeof vi.spyOn>;
-  let errorSpy: ReturnType<typeof vi.spyOn>;
+vi.mock(import("@aliou/sesame"), async (importOriginal) => {
+  const original = await importOriginal();
+  return {
+    ...original,
+    acquireIndexLock: mocks.acquireIndexLock,
+    indexSessions: mocks.indexSessions,
+  };
+});
 
+const release = vi.fn();
+let sandbox: SesameSandbox;
+
+async function run(...args: string[]) {
+  const io = captureOutput();
+  try {
+    const code = await runCli(cliArgv(...args));
+    return { code, stdout: io.stdout(), stderr: io.stderr() };
+  } finally {
+    io.restore();
+  }
+}
+
+describe("sesame index", () => {
   beforeEach(() => {
-    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    mockGetXDGPaths.mockReturnValue({
-      data: "/tmp/sesame-test-data",
-      config: "/tmp/sesame-test-config",
-      cache: "/tmp/sesame-test-cache",
-    });
-    mockLoadConfig.mockResolvedValue({
-      piSessionPaths: ["/tmp/sessions"],
-    });
-    mockOpenDatabase.mockReturnValue(db);
-    mockAcquireIndexLock.mockReturnValue({
-      path: "/tmp/sesame-test-data/index.lock",
-      release,
-    });
-    mockIndexSessions.mockResolvedValue({
+    sandbox = createSesameSandbox();
+    mocks.acquireIndexLock.mockReturnValue({ path: "index.lock", release });
+    mocks.indexSessions.mockResolvedValue({
       added: 1,
       updated: 0,
       skipped: 0,
@@ -53,38 +47,47 @@ describe("index command lock behavior", () => {
   });
 
   afterEach(() => {
-    logSpy.mockRestore();
-    errorSpy.mockRestore();
-    vi.clearAllMocks();
+    sandbox.cleanup();
   });
 
-  test("acquires and releases lock around indexing", async () => {
-    await indexCommand([]);
-
-    expect(mockAcquireIndexLock).toHaveBeenCalledWith(
-      "/tmp/sesame-test-data",
+  test("acquires and releases the lock", async () => {
+    const result = await run("index");
+    expect(result.code).toBe(0);
+    expect(mocks.acquireIndexLock).toHaveBeenCalledWith(
+      process.env.SESAME_DATA_DIR,
       "index",
     );
-    expect(db.close).toHaveBeenCalledTimes(1);
     expect(release).toHaveBeenCalledTimes(1);
   });
 
-  test("releases lock when indexing throws", async () => {
-    mockIndexSessions.mockRejectedValueOnce(new Error("boom"));
-
-    await expect(indexCommand([])).rejects.toThrow("boom");
-
-    expect(db.close).toHaveBeenCalledTimes(1);
+  test("releases the lock when indexing throws", async () => {
+    mocks.indexSessions.mockRejectedValueOnce(new Error("boom"));
+    const result = await run("index");
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("SESAME_ERROR: boom");
     expect(release).toHaveBeenCalledTimes(1);
   });
 
-  test("fails fast when lock is already held", async () => {
-    mockAcquireIndexLock.mockImplementationOnce(() => {
+  test("a held lock fails with INDEX_LOCKED", async () => {
+    mocks.acquireIndexLock.mockImplementationOnce(() => {
       throw new Error("Index already running (watch pid=123)");
     });
+    const result = await run("index", "-o", "json");
+    expect(result.code).toBe(1);
+    expect(JSON.parse(result.stderr).error.code).toBe("INDEX_LOCKED");
+    expect(mocks.indexSessions).not.toHaveBeenCalled();
+  });
 
-    await expect(indexCommand([])).rejects.toThrow("Index already running");
-
-    expect(mockOpenDatabase).not.toHaveBeenCalled();
+  test("file errors finish with exit code 3", async () => {
+    mocks.indexSessions.mockResolvedValueOnce({
+      added: 1,
+      updated: 0,
+      skipped: 0,
+      errors: 2,
+    });
+    const result = await run("index", "-o", "json");
+    expect(result.code).toBe(3);
+    expect(JSON.parse(result.stdout).totals.errors).toBe(2);
+    expect(result.stderr).toContain("2 session files failed to index");
   });
 });

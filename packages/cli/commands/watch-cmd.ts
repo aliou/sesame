@@ -1,23 +1,32 @@
 /**
- * Watch command - monitors and indexes session files on change
+ * sesame watch - index once, then re-index on file changes or on a timer.
+ *
+ * stdout carries one event per indexed source: a human line by default, or
+ * one compact JSON object per line with --output json. Logs go to stderr.
  */
 
-import { type FSWatcher, mkdirSync, watch } from "node:fs";
+import { type FSWatcher, watch } from "node:fs";
 import { join } from "node:path";
 import {
-  acquireIndexLock,
   type Database,
   expandPath,
-  getXDGPaths,
   type IndexLockHandle,
+  type IndexResult,
   indexFile,
   indexSessions,
-  loadConfig,
-  openDatabase,
   setMetadata,
 } from "@aliou/sesame";
-import { takePositiveInt } from "./args";
-import { createReindexQueue, type SourceConfig } from "./watch-queue";
+import { command, number } from "@drizzle-team/brocli";
+import { loadSesameConfig, lockIndex, openIndex } from "../context";
+import { isJson } from "../kit/output";
+import { sumResults } from "./index-cmd";
+import {
+  createReindexQueue,
+  type ReindexQueue,
+  type SourceConfig,
+} from "./watch-queue";
+
+const DEBOUNCE_MS = 500;
 
 interface WatchState {
   db: Database;
@@ -28,35 +37,55 @@ interface WatchState {
   isShuttingDown: boolean;
 }
 
-export default async function watchCommand(args: string[]): Promise<void> {
-  // Parse options. --interval <seconds> is the only recognized flag; any
-  // other flag is rejected loudly per clig.dev conventions.
-  let pollInterval: number | null = null;
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === "--interval") {
-      const intervalValue = takePositiveInt(args, i, arg);
-      i++;
-      pollInterval = intervalValue * 1000; // Convert to milliseconds
-    } else if (arg.startsWith("-")) {
-      throw new Error(`Unknown option: ${arg}`);
-    } else {
-      throw new Error(`Unexpected argument: ${arg}`);
-    }
+type WatchEvent =
+  | ({ timestamp: string; path: string } & IndexResult)
+  | { timestamp: string; path: string; error: string };
+
+export const watchCommand = command({
+  name: "watch",
+  desc: "Index, then keep the index updated as session files change",
+  options: {
+    interval: number("interval")
+      .int()
+      .min(1)
+      .desc("Re-index every N seconds instead of watching the file system"),
+  },
+  handler: async (flags: { interval?: number }) => runWatch(flags.interval),
+});
+
+function log(message: string, ...args: unknown[]): void {
+  console.error(`[%s] ${message}`, new Date().toISOString(), ...args);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function formatWatchEvent(event: WatchEvent, json: boolean): string {
+  if (json) return JSON.stringify(event);
+  if ("error" in event) {
+    return `${event.timestamp} ${event.path} error: ${event.error}`;
   }
+  return `${event.timestamp} ${event.path} added=${event.added} updated=${event.updated} skipped=${event.skipped} errors=${event.errors}`;
+}
 
-  // Load configuration
-  const config = await loadConfig();
+/** Emit an event on stdout. Human-mode errors are already logged to stderr. */
+function emit(event: WatchEvent): void {
+  const json = isJson();
+  if (!json && "error" in event) return;
+  process.stdout.write(`${formatWatchEvent(event, json)}\n`);
+}
 
-  // Get data directory and ensure it exists
-  const paths = getXDGPaths();
-  mkdirSync(paths.data, { recursive: true });
-
-  const indexLock = acquireIndexLock(paths.data, "watch");
-
-  // Open database
-  const dbPath = join(paths.data, "index.sqlite");
-  const db = openDatabase(dbPath);
+async function runWatch(intervalSeconds: number | undefined): Promise<void> {
+  const config = await loadSesameConfig();
+  const indexLock = lockIndex("watch");
+  let db: Database;
+  try {
+    db = openIndex();
+  } catch (error) {
+    indexLock.release();
+    throw error;
+  }
 
   const state: WatchState = {
     db,
@@ -65,181 +94,129 @@ export default async function watchCommand(args: string[]): Promise<void> {
     debounceTimers: new Map(),
     isShuttingDown: false,
   };
-
-  const reindexQueue = createReindexQueue(
-    (sources) => runIndexing(state, sources),
+  const queue = createReindexQueue(
+    (sources) => runIndexing(state, sources).catch((error) => fail(error)),
     () => state.isShuttingDown,
     console.error,
   );
-
   const sources = config.piSessionPaths.map((path) => ({ path }));
 
-  // Set up graceful shutdown
   const shutdown = () => {
-    if (state.isShuttingDown) {
-      return;
-    }
-    state.isShuttingDown = true;
-
-    console.error("\n[%s] Shutting down...", new Date().toISOString());
-
-    // Clear all debounce timers
-    for (const timer of state.debounceTimers.values()) {
-      clearTimeout(timer);
-    }
-    state.debounceTimers.clear();
-
-    // Close all watchers
-    for (const watcher of state.watchers) {
-      watcher.close();
-    }
-    state.watchers = [];
-
-    // Clear interval if polling
-    if (state.intervalId) {
-      clearInterval(state.intervalId);
-    }
-
-    // Close database and release process lock
-    state.db.close();
-    state.indexLock.release();
-
-    console.error("[%s] Shutdown complete", new Date().toISOString());
+    if (!stop(state)) return;
+    log("Shutdown complete");
     process.exit(0);
   };
-
+  // A queued re-index runs outside this function's try block. Release the
+  // lock and database before exiting so a supervisor can restart cleanly.
+  const fail = (error: unknown) => {
+    log("Fatal error: %s", errorMessage(error));
+    stop(state);
+    process.exit(1);
+  };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 
   try {
-    console.error("[%s] Starting watch mode...", new Date().toISOString());
-
-    // Run initial index pass
-    console.error("[%s] Running initial index...", new Date().toISOString());
+    log("Starting watch mode...");
+    log("Running initial index...");
     await runIndexing(state, sources);
-
-    if (pollInterval) {
-      // Polling mode
-      console.error(
-        "[%s] Starting poll-based monitoring (interval: %d seconds)",
-        new Date().toISOString(),
-        pollInterval / 1000,
-      );
-
-      state.intervalId = setInterval(() => {
-        if (!state.isShuttingDown) {
-          reindexQueue.enqueue(sources, "scheduled");
-        }
-      }, pollInterval);
-    } else {
-      // File system watch mode
-      console.error(
-        "[%s] Starting file system monitoring...",
-        new Date().toISOString(),
-      );
-
-      for (const source of sources) {
-        const expandedPath = expandPath(source.path);
-
-        try {
-          const watcher = watch(
-            expandedPath,
-            { recursive: true },
-            (eventType, filename) => {
-              if (state.isShuttingDown) {
-                return;
-              }
-
-              const timestamp = new Date().toISOString();
-              console.error(
-                "[%s] Detected %s: %s",
-                timestamp,
-                eventType,
-                filename || "unknown",
-              );
-
-              if (filename?.endsWith(".jsonl")) {
-                // Targeted indexing: only re-index the changed file
-                const fullPath = join(expandedPath, filename);
-
-                const existingTimer = state.debounceTimers.get(fullPath);
-                if (existingTimer) {
-                  clearTimeout(existingTimer);
-                }
-
-                const timer = setTimeout(() => {
-                  state.debounceTimers.delete(fullPath);
-                  if (!state.isShuttingDown) {
-                    reindexQueue.enqueue(
-                      [{ path: source.path, files: [fullPath] }],
-                      `fs:${eventType}:${filename}`,
-                    );
-                  }
-                }, 500);
-
-                state.debounceTimers.set(fullPath, timer);
-              } else if (!filename) {
-                // No filename info: fall back to full source scan
-                const existingTimer = state.debounceTimers.get(expandedPath);
-                if (existingTimer) {
-                  clearTimeout(existingTimer);
-                }
-
-                const timer = setTimeout(() => {
-                  state.debounceTimers.delete(expandedPath);
-                  if (!state.isShuttingDown) {
-                    reindexQueue.enqueue([source], `fs:${eventType}`);
-                  }
-                }, 500);
-
-                state.debounceTimers.set(expandedPath, timer);
-              }
-              // Non-.jsonl file changes are ignored
-            },
-          );
-
-          watcher.on("error", (error) => {
-            console.error(
-              "[%s] Watcher error for %s: %s",
-              new Date().toISOString(),
-              expandedPath,
-              error.message,
-            );
-          });
-
-          state.watchers.push(watcher);
-          console.error(
-            "[%s] Watching: %s",
-            new Date().toISOString(),
-            expandedPath,
-          );
-        } catch (error) {
-          console.error(
-            "[%s] Failed to watch %s: %s",
-            new Date().toISOString(),
-            expandedPath,
-            error instanceof Error ? error.message : String(error),
-          );
-        }
-      }
-    }
-
-    console.error(
-      "[%s] Watch mode active. Press Ctrl+C to stop.",
-      new Date().toISOString(),
-    );
-
-    // Keep the process alive
-    await new Promise(() => {});
+    if (intervalSeconds) startPolling(state, queue, sources, intervalSeconds);
+    else startWatching(state, queue, sources);
+    log("Watch mode active. Press Ctrl+C to stop.");
   } catch (error) {
-    console.error(
-      "[%s] Fatal error: %s",
-      new Date().toISOString(),
-      error instanceof Error ? error.message : String(error),
-    );
-    shutdown();
-    process.exit(1);
+    stop(state);
+    throw error;
   }
+
+  // Keep the process alive until a signal arrives.
+  await new Promise(() => {});
+}
+
+/** Release every resource. Returns false when already stopped. */
+function stop(state: WatchState): boolean {
+  if (state.isShuttingDown) return false;
+  state.isShuttingDown = true;
+  log("Shutting down...");
+  for (const timer of state.debounceTimers.values()) clearTimeout(timer);
+  state.debounceTimers.clear();
+  for (const watcher of state.watchers) watcher.close();
+  state.watchers = [];
+  if (state.intervalId) clearInterval(state.intervalId);
+  state.db.close();
+  state.indexLock.release();
+  return true;
+}
+
+function startPolling(
+  state: WatchState,
+  queue: ReindexQueue,
+  sources: SourceConfig[],
+  intervalSeconds: number,
+): void {
+  log("Starting poll-based monitoring (interval: %d seconds)", intervalSeconds);
+  state.intervalId = setInterval(() => {
+    if (!state.isShuttingDown) queue.enqueue(sources, "scheduled");
+  }, intervalSeconds * 1000);
+}
+
+function startWatching(
+  state: WatchState,
+  queue: ReindexQueue,
+  sources: SourceConfig[],
+): void {
+  log("Starting file system monitoring...");
+  for (const source of sources) {
+    const root = expandPath(source.path);
+    try {
+      const watcher = watch(root, { recursive: true }, (eventType, filename) =>
+        onFileEvent(state, queue, source, eventType, filename),
+      );
+      watcher.on("error", (error) =>
+        log("Watcher error for %s: %s", root, error.message),
+      );
+      state.watchers.push(watcher);
+      log("Watching: %s", root);
+    } catch (error) {
+      log("Failed to watch %s: %s", root, errorMessage(error));
+    }
+  }
+}
+
+function onFileEvent(
+  state: WatchState,
+  queue: ReindexQueue,
+  source: SourceConfig,
+  eventType: string,
+  filename: string | null,
+): void {
+  if (state.isShuttingDown) return;
+  log("Detected %s: %s", eventType, filename || "unknown");
+  const root = expandPath(source.path);
+
+  // No filename: fall back to a full scan of the source.
+  if (!filename) {
+    debounce(state, root, () => queue.enqueue([source], `fs:${eventType}`));
+    return;
+  }
+  // Only session files matter; ignore everything else.
+  if (!filename.endsWith(".jsonl")) return;
+
+  const file = join(root, filename);
+  debounce(state, file, () =>
+    queue.enqueue(
+      [{ path: source.path, files: [file] }],
+      `fs:${eventType}:${filename}`,
+    ),
+  );
+}
+
+function debounce(state: WatchState, key: string, run: () => void): void {
+  clearTimeout(state.debounceTimers.get(key));
+  const timer = setTimeout(() => {
+    state.debounceTimers.delete(key);
+    if (!state.isShuttingDown) run();
+  }, DEBOUNCE_MS);
+  state.debounceTimers.set(key, timer);
 }
 
 async function runIndexing(
@@ -247,102 +224,39 @@ async function runIndexing(
   sources: SourceConfig[],
 ): Promise<void> {
   const timestamp = new Date().toISOString();
-  let totalAdded = 0;
-  let totalUpdated = 0;
-  let totalErrors = 0;
+  const results: IndexResult[] = [];
 
   for (const source of sources) {
-    const expandedPath = expandPath(source.path);
-
-    try {
-      if (source.files && source.files.length > 0) {
-        // Targeted file indexing
-        for (const file of source.files) {
-          try {
-            const result = await indexFile(state.db, file);
-            totalAdded += result.added;
-            totalUpdated += result.updated;
-            totalErrors += result.errors;
-
-            console.error(
-              "[%s] Indexed %s - added: %d, updated: %d, skipped: %d, errors: %d",
-              timestamp,
-              file,
-              result.added,
-              result.updated,
-              result.skipped,
-              result.errors,
-            );
-
-            console.log(
-              JSON.stringify({
-                timestamp,
-                path: file,
-                added: result.added,
-                updated: result.updated,
-                skipped: result.skipped,
-                errors: result.errors,
-              }),
-            );
-          } catch (error) {
-            totalErrors += 1;
-            console.error(
-              "[%s] Error indexing %s: %s",
-              timestamp,
-              file,
-              error instanceof Error ? error.message : String(error),
-            );
-          }
-        }
-      } else {
-        // Full directory scan
-        const result = await indexSessions(state.db, expandedPath);
-        totalAdded += result.added;
-        totalUpdated += result.updated;
-        totalErrors += result.errors;
-
-        console.error(
-          "[%s] Indexed %s - added: %d, updated: %d, skipped: %d, errors: %d",
-          timestamp,
-          expandedPath,
-          result.added,
-          result.updated,
-          result.skipped,
-          result.errors,
-        );
-
-        console.log(
-          JSON.stringify({
-            timestamp,
-            path: expandedPath,
-            added: result.added,
-            updated: result.updated,
-            skipped: result.skipped,
-            errors: result.errors,
-          }),
-        );
-      }
-    } catch (error) {
-      totalErrors += 1;
-
-      console.error(
-        "[%s] Error indexing %s: %s",
-        timestamp,
-        expandedPath,
-        error instanceof Error ? error.message : String(error),
-      );
-
-      console.log(
-        JSON.stringify({
-          timestamp,
-          path: expandedPath,
-          error: error instanceof Error ? error.message : String(error),
-        }),
-      );
+    const targets = source.files?.length
+      ? source.files.map((file) => ({ path: file, index: indexFile }))
+      : [{ path: expandPath(source.path), index: indexSessions }];
+    for (const target of targets) {
+      const result = await indexTarget(state.db, timestamp, target);
+      results.push(result);
     }
   }
 
-  if (totalErrors === 0 && totalAdded + totalUpdated > 0) {
+  const totals = sumResults(results);
+  if (totals.errors === 0 && totals.added + totals.updated > 0) {
     setMetadata(state.db, "last_sync_at", new Date().toISOString());
+  }
+}
+
+async function indexTarget(
+  db: Database,
+  timestamp: string,
+  target: {
+    path: string;
+    index: (db: Database, path: string) => Promise<IndexResult>;
+  },
+): Promise<IndexResult> {
+  try {
+    const result = await target.index(db, target.path);
+    emit({ timestamp, path: target.path, ...result });
+    return result;
+  } catch (error) {
+    log("Error indexing %s: %s", target.path, errorMessage(error));
+    emit({ timestamp, path: target.path, error: errorMessage(error) });
+    return { added: 0, updated: 0, skipped: 0, errors: 1 };
   }
 }

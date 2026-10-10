@@ -25,7 +25,7 @@ Use **read_session** after you identified the session to inspect.
 ```bash
 sesame search "query"
 sesame search --after 7d
-sesame search "query" --json
+sesame search "query" -o json
 sesame search "query" --cwd /path/to/project
 sesame search "query" --after 7d
 sesame search "query" --before 2026-01-01
@@ -51,7 +51,7 @@ sesame search "*" --cwd /path --after 2w --exclude <session-id>
 ```bash
 sesame skills
 sesame skills --after 1m --actor user
-sesame skills --cwd /path/to/project --json
+sesame skills --cwd /path/to/project -o json
 ```
 
 Lists skills used across indexed sessions with session counts, most used first. Use it to find the exact name for `--skill`.
@@ -72,8 +72,15 @@ sesame watch --interval 30
 2. If results are empty or stale, run `sesame index` or keep `sesame watch` running.
 3. Narrow using `--cwd`, `--after`, `--before`, `--tools`, `--tool`, `--path`, `--skill`, or `--skill-path`.
 4. To answer "which sessions used skill X", run `sesame skills` to get the name, then `sesame search "*" --skill <name>`.
-4. Use `--exclude` to page through additional results across repeated searches.
-5. Use `--json` when another tool/agent needs structured output.
+5. Use `--exclude` to page through additional results across repeated searches.
+6. Use `-o json` when another tool/agent needs structured output. Results go to stdout; errors, hints, and progress go to stderr.
+
+## Errors and exit codes
+
+- Quote multi-word queries. `sesame search a b` is a usage error.
+- Exit codes: `0` success, `1` runtime failure (for example `INDEX_LOCKED` while `sesame watch` runs), `2` usage error, `3` `sesame index` finished but some files failed.
+- With `-o json`, errors print to stderr as `{"error":{"code":"...","message":"..."}}`.
+- Run `sesame help agent-guide` or `sesame <command> --help` for details.
 
 ## Date formats
 

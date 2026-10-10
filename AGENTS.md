@@ -18,9 +18,11 @@ This is a pnpm monorepo. Packages live under `packages/`:
   - `packages/sesame/indexer/index.ts` + `packages/sesame/indexer/format-tool-call.ts`: scan sources, mtime-incremental index, create `message` + `tool_call` chunks.
   - `packages/sesame/storage/db.ts`: schema (`sessions`, `chunks`, `chunks_fts`), BM25 search, filters (`cwd`, date, tool, path, limit).
 - `packages/cli/`: `@aliou/sesame-cli` — the CLI (private, not published to npm). Depends on `@aliou/sesame`.
-  - `packages/cli/sesame.ts`: CLI entrypoint, lazy-dispatches `index|search|status|watch`.
-  - `packages/cli/commands/*-cmd.ts`: CLI arg parsing + user output.
-  - `packages/cli/tsdown.config.ts`: tsdown config for building the Node SEA binary.
+  - `packages/cli/sesame.ts` + `packages/cli/run.ts`: CLI entrypoint; Brocli dispatches `search|skills|index|status|watch|completion`.
+  - `packages/cli/commands/*-cmd.ts`: Brocli command definitions + user output.
+  - `packages/cli/kit/`: CLI kit adapted from sbxctl's cli-kit (output modes, errors, exit codes).
+  - `packages/cli/tsdown.config.ts`: bundles the CLI to `dist/sesame.cjs`; with `SESAME_EXE=1`, builds Node SEA binaries into `dist-sea/`.
+- `completions/`: committed shell completion scripts, installed by `flake.nix`. Regenerate with `pnpm --filter @aliou/sesame-cli run completions` after a build.
 - `skills/sesame/SKILL.md`: pi skill for the Sesame CLI (search, index, status, watch usage).
 ## Docs map
 - `README.md`: project overview + quickstart.

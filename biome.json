@@ -20,7 +20,7 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["packages/**/*.ts", "packages/cli/bin/**"]
+    "includes": ["packages/**/*.ts", "packages/cli/scripts/**"]
   },
   "formatter": {
     "enabled": true,

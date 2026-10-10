@@ -1,102 +1,106 @@
 /**
- * Index command - scans and indexes session files
+ * sesame index - scan configured session roots and update the index.
  */
 
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
 import {
-  acquireIndexLock,
   dropAll,
   expandPath,
-  getXDGPaths,
+  type IndexResult,
   indexSessions,
-  loadConfig,
-  openDatabase,
   setMetadata,
 } from "@aliou/sesame";
+import { boolean, command } from "@drizzle-team/brocli";
+import { loadSesameConfig, lockIndex, openIndex } from "../context";
+import { warn } from "../kit/colors";
+import { setCommandExitCode } from "../kit/context";
+import {
+  isJson,
+  renderFields,
+  writeHuman,
+  writeJson,
+  writeProgress,
+  writeStderr,
+} from "../kit/output";
 
-export default async function indexCommand(args: string[]): Promise<void> {
-  // Parse flags. --full is the only recognized option; anything else
-  // starting with `-` is rejected loudly per clig.dev conventions.
-  let fullRebuild = false;
-  for (const arg of args) {
-    if (arg === "--full") {
-      fullRebuild = true;
-    } else if (arg.startsWith("-")) {
-      throw new Error(`Unknown option: ${arg}`);
-    } else {
-      throw new Error(`Unexpected argument: ${arg}`);
-    }
-  }
+/** Exit code when indexing finished but some files failed. */
+export const EXIT_DEGRADED = 3;
 
-  // Load configuration
-  const config = await loadConfig();
+type SourceResult = IndexResult & { path: string };
 
-  // Get data directory and ensure it exists
-  const paths = getXDGPaths();
-  mkdirSync(paths.data, { recursive: true });
+export const indexCommand = command({
+  name: "index",
+  desc: "Index session files (incremental by file mtime)",
+  options: {
+    full: boolean("full").desc("Drop and rebuild the index from scratch"),
+  },
+  handler: async (flags: { full?: boolean }) => runIndex(flags.full === true),
+});
 
-  const lock = acquireIndexLock(paths.data, "index");
-
-  // Open database
-  const dbPath = join(paths.data, "index.sqlite");
-  const db = openDatabase(dbPath);
-
+async function runIndex(full: boolean): Promise<void> {
+  const config = await loadSesameConfig();
+  const lock = lockIndex("index");
   try {
-    // Drop all data if --full flag is set
-    if (fullRebuild) {
-      console.log("Dropping existing index...");
-      dropAll(db);
-    }
-
-    let totalAdded = 0;
-    let totalUpdated = 0;
-    let totalSkipped = 0;
-    let totalErrors = 0;
-
-    for (const path of config.piSessionPaths) {
-      const expandedPath = expandPath(path);
-
-      console.log(`\nIndexing ${expandedPath}...`);
-      const result = await indexSessions(db, expandedPath);
-
-      // Print results for this source
-      if (result.added > 0) {
-        console.log(`  Added: ${result.added}`);
-      }
-      if (result.updated > 0) {
-        console.log(`  Updated: ${result.updated}`);
-      }
-      if (result.skipped > 0) {
-        console.log(`  Skipped: ${result.skipped}`);
-      }
-      if (result.errors > 0) {
-        console.error(`  Errors: ${result.errors}`);
-      }
-
-      // Accumulate totals
-      totalAdded += result.added;
-      totalUpdated += result.updated;
-      totalSkipped += result.skipped;
-      totalErrors += result.errors;
-    }
-
-    // Update last sync only for successful runs with actual changes
-    if (totalErrors === 0 && totalAdded + totalUpdated > 0) {
-      setMetadata(db, "last_sync_at", new Date().toISOString());
-    }
-
-    // Print summary
-    console.log(`\n${"=".repeat(50)}`);
-    console.log("Indexing complete");
-    console.log(`  Total added:   ${totalAdded}`);
-    console.log(`  Total updated: ${totalUpdated}`);
-    console.log(`  Total skipped: ${totalSkipped}`);
-    if (totalErrors > 0) {
-      console.log(`  Total errors:  ${totalErrors}`);
-    }
+    const sources = await indexAll(config.piSessionPaths, full);
+    report(sources, full);
   } finally {
-    db.close();
     lock.release();
   }
+}
+
+async function indexAll(
+  paths: string[],
+  full: boolean,
+): Promise<SourceResult[]> {
+  const db = openIndex();
+  try {
+    if (full) {
+      writeProgress("Dropping existing index...");
+      dropAll(db);
+    }
+    const sources: SourceResult[] = [];
+    for (const path of paths.map(expandPath)) {
+      writeProgress(`Indexing ${path}...`);
+      const result = await indexSessions(db, path);
+      sources.push({ path, ...result });
+    }
+    const totals = sumResults(sources);
+    // Record a sync only for clean runs that changed something.
+    if (totals.errors === 0 && totals.added + totals.updated > 0) {
+      setMetadata(db, "last_sync_at", new Date().toISOString());
+    }
+    return sources;
+  } finally {
+    db.close();
+  }
+}
+
+export function sumResults(results: IndexResult[]): IndexResult {
+  return results.reduce(
+    (sum, result) => ({
+      added: sum.added + result.added,
+      updated: sum.updated + result.updated,
+      skipped: sum.skipped + result.skipped,
+      errors: sum.errors + result.errors,
+    }),
+    { added: 0, updated: 0, skipped: 0, errors: 0 },
+  );
+}
+
+function report(sources: SourceResult[], full: boolean): void {
+  const totals = sumResults(sources);
+  if (isJson()) {
+    writeJson({ full, sources, totals });
+  } else {
+    writeHuman(
+      renderFields([
+        ["Added", String(totals.added)],
+        ["Updated", String(totals.updated)],
+        ["Skipped", String(totals.skipped)],
+        ["Errors", String(totals.errors)],
+      ]),
+    );
+  }
+  if (totals.errors === 0) return;
+  writeStderr(warn(`warning: ${totals.errors} session files failed to index`));
+  setCommandExitCode(EXIT_DEGRADED);
 }
