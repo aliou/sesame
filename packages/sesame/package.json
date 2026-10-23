@@ -11,7 +11,9 @@
     "./worker": "./dist/storage/search-worker.mjs"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/test-helpers",
+    "!dist/tsconfig.tsbuildinfo"
   ],
   "scripts": {
     "build": "tsdown index.ts --no-config --format esm --out-dir dist --clean --no-dts && tsdown storage/search-worker.ts --no-config --format esm --out-dir dist/storage --no-clean --no-dts && tsc --emitDeclarationOnly",
