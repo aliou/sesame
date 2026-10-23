@@ -1,78 +1,41 @@
 # sesame
 
-Search coding-agent sessions with local BM25 full-text search (SQLite FTS5).
+Search your past coding-agent sessions. Sesame indexes Pi JSONL session files into a local SQLite FTS5 index and ranks results with BM25, so you can find the session where you fixed that bug or touched that file.
 
-Sesame indexes Pi JSONL session files locally and lets you search them with ranked session, project, date, tool, path, and skill filters.
+- Ranked full-text search, or browse recent sessions with no query.
+- Filters by project directory, date, tool call, file path, and skill.
+- A `sesame skills` leaderboard of the skills your sessions loaded.
+- Watch mode keeps the index current.
+- Everything stays local.
 
-## What it does
+## Install
 
-- indexes Pi session files from `~/.pi/agent/sessions` by default
-- stores normalized session/chunk data in SQLite under Sesame's XDG data directory
-- supports ranked keyword/topic search with SQLite FTS5 + BM25
-- supports listing recent sessions with `sesame search` or `sesame search "*"`
-- supports tool-oriented filters (`--tools`, `--tool`, `--path`)
-- supports skill filters (`--skill`, `--skill-path`) plus a `sesame skills` leaderboard
-- supports filesystem watch mode and interval polling
-
-## Installation
-
-### Homebrew
+With Nix, using the release binaries for macOS (arm64) and Linux (arm64, x64):
 
 ```bash
-brew tap aliou/toolbox
-brew install sesame
+nix profile install github:aliou/sesame
 ```
 
-### From source
+Binaries are also attached to each [CLI release](https://github.com/aliou/sesame/releases) (tags `@aliou/sesame-cli@<version>`). To use Sesame as a library, see [`@aliou/sesame`](./packages/sesame/README.md).
 
-Requires Node.js 26 or newer and pnpm.
-
-## Quickstart (repo)
+## Usage
 
 ```bash
-pnpm install
-pnpm run build
+sesame index
+sesame search "nix infra simplify"
+sesame search "package.json exports" --tools --tool write
+sesame search "*" --skill vitest
+sesame search --after 7d
+sesame skills
+sesame status
+sesame watch
 ```
 
-`pnpm run build` bundles the CLI into `packages/cli/dist/sesame.cjs`. Use `pnpm run dev` to rebuild on change.
-
-Index sessions:
-
-```bash
-./packages/cli/dist/sesame.cjs index
-```
-
-Search:
-
-```bash
-./packages/cli/dist/sesame.cjs search "nix infra simplify"
-./packages/cli/dist/sesame.cjs search "package.json exports" --tools --tool write
-./packages/cli/dist/sesame.cjs search "*" --skill vitest
-./packages/cli/dist/sesame.cjs search --after 7d
-```
-
-List skills used across sessions:
-
-```bash
-./packages/cli/dist/sesame.cjs skills
-```
-
-Check index:
-
-```bash
-./packages/cli/dist/sesame.cjs status
-```
-
-Watch for changes:
-
-```bash
-./packages/cli/dist/sesame.cjs watch
-./packages/cli/dist/sesame.cjs watch --interval 30
-```
+`sesame --help` and `sesame <command> --help` list every flag. Full reference: [`docs/cli-usage.md`](./docs/cli-usage.md).
 
 ## Configuration
 
-Sesame reads `~/.config/sesame/config.jsonc` by default and creates it if missing:
+Sesame reads `~/.config/sesame/config.jsonc` and creates it if missing:
 
 ```json
 {
@@ -80,28 +43,26 @@ Sesame reads `~/.config/sesame/config.jsonc` by default and creates it if missin
 }
 ```
 
-The SQLite index is stored at `~/.local/share/sesame/index.sqlite` by default on macOS/Linux. Sesame also respects `SESAME_*_DIR` and XDG directory environment variables.
+The index lives at `~/.local/share/sesame/index.sqlite`. `SESAME_DATA_DIR`, `SESAME_CONFIG_DIR`, `SESAME_CACHE_DIR`, `SESAME_RUNTIME_DIR`, and the XDG variables override the default directories.
 
-## CLI docs
+## Pi skill
 
-See [`docs/cli-usage.md`](./docs/cli-usage.md).
+`skills/sesame/SKILL.md` teaches a Pi agent to search its own past sessions with the CLI:
 
-## Internals docs
-
-- indexing flow: [`docs/indexing.md`](./docs/indexing.md)
-- library/API usage: [`docs/library-usage.md`](./docs/library-usage.md)
-- docs index: [`docs/README.md`](./docs/README.md)
-
-## Pi integration
-
-Monorepo package:
-
-- `skills/sesame/SKILL.md`: pi skill for the Sesame CLI.
+```bash
+pi install git:github.com/aliou/sesame
+```
 
 ## Development
 
+Requires Node.js 26 or newer and pnpm (`nix develop` provides both).
+
 ```bash
+pnpm install
+pnpm run build        # CLI bundle at packages/cli/dist/sesame.cjs
 pnpm run lint
-pnpm test
 pnpm run typecheck
+pnpm test
 ```
+
+How indexing works: [`docs/indexing.md`](./docs/indexing.md). All docs: [`docs/README.md`](./docs/README.md).
