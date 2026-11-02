@@ -13,15 +13,15 @@
       binaries = {
         "aarch64-darwin" = {
           url = "https://github.com/aliou/sesame/releases/download/@aliou/sesame-cli@${version}/sesame-darwin-arm64";
-          hash = "sha256-7Zlgl6kYmtB9hCZexqzNZVO39bC0CESYmhgQydZcWtw="; # darwin
+          hash = "sha256-9oW3CgGyo5WI0vi4YOt5D9031HMcQ+npG75kyEFuY34="; # darwin
         };
         "aarch64-linux" = {
           url = "https://github.com/aliou/sesame/releases/download/@aliou/sesame-cli@${version}/sesame-linux-arm64";
-          hash = "sha256-NT5v5x+Ldk/H1UdfX1sukTMJc8MdpVZSnSA98tcXx3Y="; # linux-arm64
+          hash = "sha256-u/CRCekrEoGsPI/4ymk8zOL0/1Q3iEs52Cw1hToNavk="; # linux-arm64
         };
         "x86_64-linux" = {
           url = "https://github.com/aliou/sesame/releases/download/@aliou/sesame-cli@${version}/sesame-linux-x64";
-          hash = "sha256-euYMsgm52lmiXVjXO3U9yQUL01q2sUkeY/EbRymbtrM="; # linux-x64
+          hash = "sha256-G5sh6SKWNyAi3Pqk9jXPMxSucY8cXgEKMMRpYyYJk/Q="; # linux-x64
         };
       };
 
