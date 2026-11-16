@@ -1,5 +1,11 @@
 # @aliou/sesame
 
+## 0.14.4
+
+### Patch Changes
+
+- 9463079: Fix published type declarations for TypeScript consumers using Node16 and NodeNext module resolution.
+
 ## 0.14.3
 
 ### Patch Changes

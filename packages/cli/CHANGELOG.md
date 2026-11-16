@@ -1,5 +1,12 @@
 # @aliou/sesame-cli
 
+## 0.14.2
+
+### Patch Changes
+
+- Updated dependencies [9463079]
+  - @aliou/sesame@0.14.4
+
 ## 0.14.1
 
 ### Patch Changes
