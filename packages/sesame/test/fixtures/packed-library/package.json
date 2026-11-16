@@ -1,0 +1,5 @@
+{
+  "name": "sesame-consumer",
+  "private": true,
+  "type": "module"
+}

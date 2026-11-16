@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "tsdown && chmod +x dist/sesame.cjs && node scripts/smoke-build.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --build",
     "build:binary": "SESAME_EXE=1 tsdown",
     "completions": "node scripts/write-completions.mjs",
     "dev": "tsdown --watch",

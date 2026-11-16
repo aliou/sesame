@@ -20,7 +20,11 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["packages/**/*.ts", "packages/cli/scripts/**"]
+    "includes": [
+      "packages/**/*.ts",
+      "packages/cli/scripts/**",
+      "!packages/sesame/test/fixtures"
+    ]
   },
   "formatter": {
     "enabled": true,
