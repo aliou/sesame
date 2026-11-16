@@ -1,6 +1,6 @@
 # @aliou/sesame-cli
 
-## 0.14.2
+## 0.14.4
 
 ### Patch Changes
 
