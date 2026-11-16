@@ -1,6 +1,6 @@
 {
   "name": "@aliou/sesame",
-  "version": "0.14.3",
+  "version": "0.14.4",
   "description": "BM25 search for coding agent sessions",
   "type": "module",
   "exports": {
@@ -10,7 +10,9 @@
     },
     "./worker": "./dist/storage/search-worker.mjs"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc --noEmit && tsc --project test/tsconfig.json",
